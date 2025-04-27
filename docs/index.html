@@ -1,20 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>PLTR Transaction Chart</title>
+  <meta charset="UTF-8">
+  <title>PLTR: Price + Your Trades</title>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { font-family: sans-serif; padding: 2rem; }
-    canvas { max-width: 800px; }
-  </style>
 </head>
 <body>
   <h1>PLTR: Price + Your Trades</h1>
   <canvas id="pltrChart" height="400"></canvas>
-
   <script>
+    // …all of the Chart.js + PapaParse code we provided…
     const transactionsUrl =
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?output=csv';
     const alphaKey = 'VC0HKS05TBNC8AHS';
@@ -115,3 +111,4 @@
   </script>
 </body>
 </html>
+
