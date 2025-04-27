@@ -7,19 +7,19 @@
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Data Labels plugin -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 
   <style>
     body {
-      margin: 0; padding: 1rem;
+      margin: 0;
+      padding: 1rem;
       font-family: sans-serif;
       background: #f5f7fa;
     }
     h1 {
-      text-align: center; margin-bottom: 1rem;
+      text-align: center;
+      margin-bottom: 1rem;
     }
     .dashboard {
       display: grid;
@@ -56,9 +56,6 @@
   <div class="dashboard" id="dashboard"></div>
 
   <script>
-    // register Data Labels plugin
-    Chart.register(ChartDataLabels);
-
     const csvUrl =
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
@@ -81,70 +78,70 @@
         });
         const totalProfit = totalValue - totalSpent;
 
-        // summary: pie card
+        // Pie chart card
         const pieCard = document.createElement('div');
         pieCard.className = 'chart-card';
         pieCard.innerHTML = `
           <h2>Allocation (NZD)</h2>
           <div class="chart-container">
             <canvas id="summaryPie"></canvas>
-          </div>`;
+          </div>
+        `;
         dashboard.appendChild(pieCard);
 
-        // summary: bar card
+        // Bar chart card
         const barCard = document.createElement('div');
         barCard.className = 'chart-card';
         barCard.innerHTML = `
           <h2>Portfolio Summary (NZD)</h2>
           <div class="chart-container">
             <canvas id="summaryBar"></canvas>
-          </div>`;
+          </div>
+        `;
         dashboard.appendChild(barCard);
 
-        // render allocation pie
+        // render pie
         const pieLabels = rows.map(r => r.Ticker);
         const pieData   = rows.map(r => parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0);
         new Chart(document.getElementById('summaryPie'), {
           type: 'doughnut',
-          data: { labels: pieLabels, datasets: [{ data: pieData }] },
+          data: { labels: pieLabels, datasets:[{ data: pieData }] },
           options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: 'right' } }
+            responsive:true,
+            maintainAspectRatio:false,
+            plugins:{ legend:{ position:'right' } }
           }
         });
 
-        // render summary bar
+        // render bar
         new Chart(document.getElementById('summaryBar'), {
           type: 'bar',
           data: {
             labels: ['Spent','Profit','Value'],
-            datasets: [{
-              label: 'NZD',
-              data: [totalSpent, totalProfit, totalValue],
-              backgroundColor: [
+            datasets:[{
+              label:'NZD',
+              data:[totalSpent, totalProfit, totalValue],
+              backgroundColor:[
                 'rgba(54,162,235,0.6)',
                 'rgba(255,205,86,0.6)',
                 'rgba(75,192,192,0.6)'
               ]
             }]
           },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  callback: v => '$' + v.toLocaleString(undefined,{minimumFractionDigits:2})
-                }
+          options:{
+            responsive:true,
+            maintainAspectRatio:false,
+            scales:{
+              y:{
+                beginAtZero:true,
+                ticks:{ callback: v=> '$'+v.toLocaleString(undefined,{minimumFractionDigits:2}) }
               }
             },
-            plugins: { legend: { display: false } }
+            plugins:{ legend:{ display:false } }
           }
         });
 
-        // per‐holding cards
+        // one card per holding
         rows.forEach(r => {
           const avgUsd   = parseFloat(r['Average cost'].replace(/[^\d.-]/g,'')) || 0;
           const priceUsd = parseFloat(r.Price.replace(/[^\d.-]/g,''))      || 0;
@@ -159,54 +156,35 @@
             <h2>${r.Ticker}</h2>
             <div class="chart-container">
               <canvas id="chart-${r.Ticker}"></canvas>
-            </div>`;
+            </div>
+          `;
           dashboard.appendChild(card);
 
           new Chart(document.getElementById(`chart-${r.Ticker}`), {
-            type: 'bar',
-            data: {
-              labels: ['Avg cost (USD)','Price (USD)','Cost (NZD)','Value (NZD)'],
-              datasets: [{
-                label: 'Amount',
-                data: [avgUsd, priceUsd, costNzd, mvNzd],
-                backgroundColor: [
-                  'rgba(54,162,235,0.6)',
-                  'rgba(255,159,64,0.6)',
-                  'rgba(75,192,192,0.6)',
-                  'rgba(153,102,255,0.6)'
-                ]
-              }]
+            type:'bar',
+            data:{
+              labels:['Price/share','Total value'],
+              datasets:[
+                { label:'Avg cost (USD)',       data:[avgUsd,null],   yAxisID:'USD', backgroundColor:'rgba(54,162,235,0.6)' },
+                { label:'Current price (USD)',   data:[priceUsd,null], yAxisID:'USD', backgroundColor:'rgba(255,159,64,0.6)' },
+                { label:'Total cost (NZD)',      data:[null,costNzd],  yAxisID:'NZD', backgroundColor:'rgba(75,192,192,0.6)' },
+                { label:'Market value (NZD)',    data:[null,mvNzd],    yAxisID:'NZD', backgroundColor:'rgba(153,102,255,0.6)' }
+              ]
             },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  ticks: {
-                    callback: v => {
-                      // determine NZD vs USD by index
-                      return '$' + v.toLocaleString(undefined,{minimumFractionDigits:2});
-                    }
-                  }
-                }
+            options:{
+              responsive:true,
+              maintainAspectRatio:false,
+              scales:{
+                USD:{ type:'linear',position:'left',title:{display:true,text:'USD'} },
+                NZD:{ type:'linear',position:'right',title:{display:true,text:'NZD'},grid:{drawOnChartArea:false},
+                      ticks:{ callback:v=>'$'+v.toLocaleString() } }
               },
-              plugins: {
-                legend: { display: false },
-                datalabels: {
-                  anchor: 'end',
-                  align: 'end',
-                  color: ctx => ctx.dataset.backgroundColor[ctx.dataIndex],
-                  formatter: v =>
-                    v != null ? '$' + v.toLocaleString(undefined,{minimumFractionDigits:2}) : ''
-                }
-              }
-            },
-            plugins: [ChartDataLabels]
+              plugins:{ legend:{ position:'bottom' } }
+            }
           });
         });
       },
-      error: err => console.error('CSV load error:', err)
+      error: err => console.error(err)
     });
   </script>
 </body>
