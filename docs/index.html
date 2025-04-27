@@ -39,11 +39,6 @@
       font-size: 1.1rem;
       text-align: center;
     }
-    .summary-content p {
-      margin: 0.5rem 0;
-      font-size: 1rem;
-      text-align: center;
-    }
     .chart-container {
       position: relative;
       flex: 1;
@@ -70,7 +65,7 @@
         const dashboard = document.getElementById('dashboard');
         const rows = data.filter(r => r.Ticker);
 
-        // compute totals
+        // 1) compute totals in NZD
         let totalSpent = 0, totalValue = 0;
         rows.forEach(r => {
           const totalCostUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
@@ -84,20 +79,54 @@
         });
         const totalProfit = totalValue - totalSpent;
 
-        // summary card
+        // 2) summary card and chart
         const summaryCard = document.createElement('div');
         summaryCard.className = 'chart-card';
         summaryCard.innerHTML = `
           <h2>Portfolio Summary</h2>
-          <div class="summary-content">
-            <p>Amount spent: NZD $${totalSpent.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
-            <p>Profit: NZD $${totalProfit.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
-            <p>Total value: NZD $${totalValue.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
+          <div class="chart-container">
+            <canvas id="summaryChart"></canvas>
           </div>
         `;
         dashboard.appendChild(summaryCard);
 
-        // one card per holding
+        new Chart(document.getElementById('summaryChart'), {
+          type: 'bar',
+          data: {
+            labels: ['Amount Spent', 'Profit', 'Total Value'],
+            datasets: [{
+              label: 'NZD',
+              data: [totalSpent, totalProfit, totalValue],
+              backgroundColor: [
+                'rgba(54,162,235,0.6)',
+                'rgba(255,205,86,0.6)',
+                'rgba(75,192,192,0.6)'
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: v => '$' + v.toLocaleString(undefined, {minimumFractionDigits:2})
+                }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: ctx => `NZD $${ctx.parsed.y.toLocaleString(undefined, {minimumFractionDigits:2})}`
+                }
+              }
+            }
+          }
+        });
+
+        // 3) individual holding charts
         rows.forEach(r => {
           const avgCostUsd     = parseFloat(r['Average cost'].replace(/[^\d.-]/g,'')) || 0;
           const priceUsd       = parseFloat(r.Price.replace(/[^\d.-]/g,''))      || 0;
@@ -164,7 +193,7 @@
                   title: { display: true, text: 'NZD' },
                   grid: { drawOnChartArea: false },
                   ticks: {
-                    callback: v => '$' + v.toLocaleString()
+                    callback: v => '$' + v.toLocaleString(undefined, {minimumFractionDigits:2})
                   }
                 }
               },
@@ -172,9 +201,9 @@
                 tooltip: {
                   callbacks: {
                     label: ctx => {
-                      const v = ctx.parsed.y || 0;
+                      const val = ctx.parsed.y || 0;
                       const unit = ctx.dataset.yAxisID;
-                      return `${ctx.dataset.label}: ${unit} $${v.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+                      return `${ctx.dataset.label}: ${unit} $${val.toLocaleString(undefined, {minimumFractionDigits:2})}`;
                     }
                   }
                 },
@@ -189,4 +218,5 @@
   </script>
 </body>
 </html>
+
 
