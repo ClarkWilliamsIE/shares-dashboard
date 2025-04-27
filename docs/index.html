@@ -27,16 +27,19 @@
       download: true,
       header: true,
       complete: ({ data }) => {
-        // find PLTR row
+        // grab PLTR row
         const r = data.find(r => r.Ticker === 'PLTR');
-        const avgCost     = parseFloat(r['Average cost'].replace(/,/g,''));
-        const price       = parseFloat(r.Price.replace(/,/g,''));
-        const totalCost   = parseFloat(r['Total Cost'].replace(/,/g,''));
-        const marketValue = parseFloat(r['Market Value'].replace(/,/g,''));
-        const nzdValue    = parseFloat(r['NZD'].replace(/,/g,''));
 
-        // convert your cost to NZD at today’s rate
-        const costNZD = totalCost * (nzdValue / marketValue);
+        // clean & parse numbers
+        const avgCostUsd     = parseFloat(r['Average cost'].replace(/[^\d.-]/g,''));
+        const priceUsd       = parseFloat(r.Price.replace(/[^\d.-]/g,''));
+        const totalCostUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,''));
+        const marketValueNzd = parseFloat(r['NZD'].replace(/[^\d.-]/g,''));
+
+        // convert cost to NZD at today’s rate
+        // note: marketValueUsd might be needed if you want historical FX; here we assume costUsd→NZD via today's rate:
+        const marketValueUsd = parseFloat(r['Market Value'].replace(/[^\d.-]/g,''));
+        const costNzd        = totalCostUsd * (marketValueNzd / marketValueUsd);
 
         new Chart(document.getElementById('pltrChart'), {
           type: 'bar',
@@ -44,26 +47,26 @@
             labels: ['Per Share', 'Aggregate'],
             datasets: [
               {
-                label: 'Purchased (USD)',
-                data: [avgCost, null],
+                label: 'Avg cost/share (USD)',
+                data: [avgCostUsd, null],
                 yAxisID: 'USD',
                 backgroundColor: 'rgba(54,162,235,0.6)'
               },
               {
-                label: 'Current (USD)',
-                data: [price, null],
+                label: 'Price/share (USD)',
+                data: [priceUsd, null],
                 yAxisID: 'USD',
                 backgroundColor: 'rgba(255,159,64,0.6)'
               },
               {
-                label: 'Purchased (NZD)',
-                data: [null, costNZD],
+                label: 'Total cost (NZD)',
+                data: [null, costNzd],
                 yAxisID: 'NZD',
                 backgroundColor: 'rgba(75,192,192,0.6)'
               },
               {
-                label: 'Current (NZD)',
-                data: [null, nzdValue],
+                label: 'Market value (NZD)',
+                data: [null, marketValueNzd],
                 yAxisID: 'NZD',
                 backgroundColor: 'rgba(153,102,255,0.6)'
               }
@@ -71,25 +74,29 @@
           },
           options: {
             scales: {
+              x: { stacked: false },
               USD: {
                 type: 'linear',
                 position: 'left',
-                title: { display: true, text: 'USD / share' }
+                title: { display: true, text: 'USD' }
               },
               NZD: {
                 type: 'linear',
                 position: 'right',
-                title: { display: true, text: 'NZD / total' },
-                grid: { drawOnChartArea: false }
+                title: { display: true, text: 'NZD' },
+                grid: { drawOnChartArea: false },
+                ticks: {
+                  callback: val => '$' + val.toLocaleString()
+                }
               }
             },
             plugins: {
               tooltip: {
                 callbacks: {
                   label: ctx => {
-                    const val = ctx.parsed.y;
+                    const v = ctx.parsed.y;
                     const unit = ctx.dataset.yAxisID === 'USD' ? 'USD' : 'NZD';
-                    return `${ctx.dataset.label}: ${unit} $${val.toLocaleString()}`;
+                    return `${ctx.dataset.label}: ${unit} $${v.toLocaleString()}`;
                   }
                 }
               },
