@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>PLTR Dashboard</title>
+  <meta charset="UTF-8">
+  <title>PLTR: USD & NZD</title>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -16,23 +16,27 @@
 </head>
 
 <body>
-  <h1>PLTR: Purchase vs Current</h1>
-  <canvas id="pltrChart" height="300"></canvas>
+  <h1>PLTR — USD per share & NZD aggregate</h1>
+  <canvas id="pltrChart" height="350"></canvas>
 
   <script>
-    const csvUrl = 
+    const csvUrl =
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
     Papa.parse(csvUrl, {
       download: true,
       header: true,
       complete: ({ data }) => {
-        // grab your PLTR row
+        // find PLTR row
         const r = data.find(r => r.Ticker === 'PLTR');
         const avgCost     = parseFloat(r['Average cost'].replace(/,/g,''));
         const price       = parseFloat(r.Price.replace(/,/g,''));
         const totalCost   = parseFloat(r['Total Cost'].replace(/,/g,''));
         const marketValue = parseFloat(r['Market Value'].replace(/,/g,''));
+        const nzdValue    = parseFloat(r['NZD'].replace(/,/g,''));
+
+        // convert your cost to NZD at today’s rate
+        const costNZD = totalCost * (nzdValue / marketValue);
 
         new Chart(document.getElementById('pltrChart'), {
           type: 'bar',
@@ -40,25 +44,55 @@
             labels: ['Per Share', 'Aggregate'],
             datasets: [
               {
-                label: 'Purchased',
-                data: [avgCost, totalCost],
+                label: 'Purchased (USD)',
+                data: [avgCost, null],
+                yAxisID: 'USD',
                 backgroundColor: 'rgba(54,162,235,0.6)'
               },
               {
-                label: 'Current',
-                data: [price, marketValue],
+                label: 'Current (USD)',
+                data: [price, null],
+                yAxisID: 'USD',
                 backgroundColor: 'rgba(255,159,64,0.6)'
+              },
+              {
+                label: 'Purchased (NZD)',
+                data: [null, costNZD],
+                yAxisID: 'NZD',
+                backgroundColor: 'rgba(75,192,192,0.6)'
+              },
+              {
+                label: 'Current (NZD)',
+                data: [null, nzdValue],
+                yAxisID: 'NZD',
+                backgroundColor: 'rgba(153,102,255,0.6)'
               }
             ]
           },
           options: {
             scales: {
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: 'USD' }
+              USD: {
+                type: 'linear',
+                position: 'left',
+                title: { display: true, text: 'USD / share' }
+              },
+              NZD: {
+                type: 'linear',
+                position: 'right',
+                title: { display: true, text: 'NZD / total' },
+                grid: { drawOnChartArea: false }
               }
             },
             plugins: {
+              tooltip: {
+                callbacks: {
+                  label: ctx => {
+                    const val = ctx.parsed.y;
+                    const unit = ctx.dataset.yAxisID === 'USD' ? 'USD' : 'NZD';
+                    return `${ctx.dataset.label}: ${unit} $${val.toLocaleString()}`;
+                  }
+                }
+              },
               legend: { position: 'bottom' }
             }
           }
