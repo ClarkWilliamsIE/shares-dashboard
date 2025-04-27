@@ -66,7 +66,7 @@
         const dashboard = document.getElementById('dashboard');
         const rows = data.filter(r => r.Ticker);
 
-        // compute totals
+        // compute totals in NZD
         let totalSpent = 0, totalValue = 0;
         rows.forEach(r => {
           const tcUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
@@ -113,7 +113,7 @@
           }
         });
 
-        // render bar
+        // render summary bar
         new Chart(document.getElementById('summaryBar'), {
           type: 'bar',
           data: {
@@ -141,15 +141,18 @@
           }
         });
 
-        // one card per holding
+        // individual holding cards
         rows.forEach(r => {
-          const avgUsd   = parseFloat(r['Average cost'].replace(/[^\d.-]/g,'')) || 0;
-          const priceUsd = parseFloat(r.Price.replace(/[^\d.-]/g,''))      || 0;
-          const tcUsd    = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
-          const mvUsd    = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 0;
-          const mvNzd    = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
+          const tcUsd    = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,''))       || 0;
+          const mvNzd    = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))             || 0;
+          const mvUsd    = parseFloat(r['Market Value'].replace(/[^\d.-]/g,''))    || 0;
+          const avgUsd   = parseFloat(r['Average cost'].replace(/[^\d.-]/g,''))    || 0;
+          const priceUsd = parseFloat(r.Price.replace(/[^\d.-]/g,''))              || 0;
           const costNzd  = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
+          const profitNzd= mvNzd - costNzd;
+          const pctChange= parseFloat(r['% Change'].replace(/[^\d.-]/g,''))        || 0;
 
+          // create card
           const card = document.createElement('div');
           card.className = 'chart-card';
           card.innerHTML = `
@@ -160,31 +163,69 @@
           `;
           dashboard.appendChild(card);
 
+          // mixed NZD bars + % line
           new Chart(document.getElementById(`chart-${r.Ticker}`), {
-            type:'bar',
-            data:{
-              labels:['Price/share','Total value'],
-              datasets:[
-                { label:'Avg cost (USD)',       data:[avgUsd,null],   yAxisID:'USD', backgroundColor:'rgba(54,162,235,0.6)' },
-                { label:'Current price (USD)',   data:[priceUsd,null], yAxisID:'USD', backgroundColor:'rgba(255,159,64,0.6)' },
-                { label:'Total cost (NZD)',      data:[null,costNzd],  yAxisID:'NZD', backgroundColor:'rgba(75,192,192,0.6)' },
-                { label:'Market value (NZD)',    data:[null,mvNzd],    yAxisID:'NZD', backgroundColor:'rgba(153,102,255,0.6)' }
+            data: {
+              labels: ['Cost','Value','Profit','% Change'],
+              datasets: [
+                {
+                  type: 'bar',
+                  label: 'NZD',
+                  data: [costNzd, mvNzd, profitNzd, null],
+                  backgroundColor: [
+                    'rgba(54,162,235,0.6)',
+                    'rgba(75,192,192,0.6)',
+                    'rgba(255,205,86,0.6)'
+                  ]
+                },
+                {
+                  type: 'line',
+                  label: '% Change',
+                  data: [null, null, null, pctChange],
+                  yAxisID: 'PCT',
+                  borderColor: 'rgba(255,99,132,0.8)',
+                  backgroundColor: 'rgba(255,99,132,0.4)',
+                  tension: 0.3,
+                  pointRadius: 4,
+                  fill: false
+                }
               ]
             },
-            options:{
-              responsive:true,
-              maintainAspectRatio:false,
-              scales:{
-                USD:{ type:'linear',position:'left',title:{display:true,text:'USD'} },
-                NZD:{ type:'linear',position:'right',title:{display:true,text:'NZD'},grid:{drawOnChartArea:false},
-                      ticks:{ callback:v=>'$'+v.toLocaleString() } }
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: { display: true, text: 'NZD' },
+                  ticks: { callback: v => '$'+v.toLocaleString() }
+                },
+                PCT: {
+                  type: 'linear',
+                  position: 'right',
+                  title: { display: true, text: '% Change' },
+                  grid: { drawOnChartArea: false },
+                  ticks: { callback: v => v + '%' }
+                }
               },
-              plugins:{ legend:{ position:'bottom' } }
+              plugins: {
+                tooltip: {
+                  callbacks: {
+                    label: ctx => {
+                      if (ctx.dataset.type === 'line') {
+                        return `% Change: ${ctx.parsed.y}%`;
+                      }
+                      return `NZD $${ctx.parsed.y.toLocaleString()}`;
+                    }
+                  }
+                },
+                legend: { position: 'bottom' }
+              }
             }
           });
         });
       },
-      error: err => console.error(err)
+      error: err => console.error('CSV load error:', err)
     });
   </script>
 </body>
