@@ -3,21 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <title>Shares Dashboard</title>
-
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; }
+    canvas { max-width: 600px; margin: 1rem 0; }
+  </style>
 </head>
 <body>
   <h1>Our Shares</h1>
-
   <canvas id="allocation" height="200"></canvas>
   <canvas id="performance" height="200"></canvas>
 
-  <!-- your CSV-fetch + init code -->
   <script>
-    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1v…/output=csv';
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
     Papa.parse(csvUrl, {
       download: true,
@@ -26,10 +27,10 @@
     });
 
     function initCharts(rows) {
-      const labels    = rows.map(r => r.Ticker);
-      const market    = rows.map(r => +r['Market Value'].replace(/,/g,''));
-      const cost      = rows.map(r => +r['Total Cost'].replace(/,/g,''));
-      const profit    = market.map((v,i) => v - cost[i]);
+      const labels = rows.map(r => r.Ticker);
+      const market = rows.map(r => +r['Market Value'].replace(/,/g,''));
+      const cost   = rows.map(r => +r['Total Cost'].replace(/,/g,''));
+      const profit = market.map((v,i) => v - cost[i]);
 
       new Chart(
         document.getElementById('allocation'),
@@ -38,8 +39,11 @@
 
       new Chart(
         document.getElementById('performance'),
-        { type:'bar', data:{ labels, datasets:[{ label:'P/L', data: profit }] },
-          options:{ scales:{ y:{ beginAtZero:true } } } }
+        {
+          type:'bar',
+          data:{ labels, datasets:[{ label:'Unrealised P/L', data: profit }] },
+          options:{ scales:{ y:{ beginAtZero:true } } }
+        }
       );
     }
   </script>
