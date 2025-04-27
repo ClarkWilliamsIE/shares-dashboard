@@ -1,1 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Shares Dashboard</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PapaParse -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+</head>
+<body>
+  <h1>Our Shares</h1>
+
+  <canvas id="allocation" height="200"></canvas>
+  <canvas id="performance" height="200"></canvas>
+
+  <!-- your CSV-fetch + init code -->
+  <script>
+    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1v…/output=csv';
+
+    Papa.parse(csvUrl, {
+      download: true,
+      header: true,
+      complete: ({ data }) => initCharts(data)
+    });
+
+    function initCharts(rows) {
+      const labels    = rows.map(r => r.Ticker);
+      const market    = rows.map(r => +r['Market Value'].replace(/,/g,''));
+      const cost      = rows.map(r => +r['Total Cost'].replace(/,/g,''));
+      const profit    = market.map((v,i) => v - cost[i]);
+
+      new Chart(
+        document.getElementById('allocation'),
+        { type:'pie', data:{ labels, datasets:[{ data: market }] } }
+      );
+
+      new Chart(
+        document.getElementById('performance'),
+        { type:'bar', data:{ labels, datasets:[{ label:'P/L', data: profit }] },
+          options:{ scales:{ y:{ beginAtZero:true } } } }
+      );
+    }
+  </script>
+</body>
+</html>
 
