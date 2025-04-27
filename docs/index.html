@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Shares Dashboard</title>
+  <title>Winnerland!</title>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -39,6 +39,11 @@
       font-size: 1.1rem;
       text-align: center;
     }
+    .summary-content p {
+      margin: 0.5rem 0;
+      font-size: 1rem;
+      text-align: center;
+    }
     .chart-container {
       position: relative;
       flex: 1;
@@ -63,99 +68,121 @@
       header: true,
       complete: ({ data }) => {
         const dashboard = document.getElementById('dashboard');
+        const rows = data.filter(r => r.Ticker);
 
-        data
-          .filter(row => row.Ticker)      // skip empty rows
-          .forEach(row => {
-            // parse numbers
-            const avgCostUsd     = parseFloat(row['Average cost'].replace(/[^\d.-]/g,'')) || 0;
-            const priceUsd       = parseFloat(row.Price.replace(/[^\d.-]/g,''))      || 0;
-            const totalCostUsd   = parseFloat(row['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
-            const marketValueNzd = parseFloat(row['NZD'].replace(/[^\d.-]/g,''))       || 0;
-            const marketValueUsd = parseFloat(row['Market Value'].replace(/[^\d.-]/g,'')) || 0;
-            // convert USD cost to NZD at today’s rate
-            const costNzd = totalCostUsd * (marketValueNzd / (marketValueUsd || 1));
+        // compute totals
+        let totalSpent = 0, totalValue = 0;
+        rows.forEach(r => {
+          const totalCostUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
+          const marketValueUsd = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 0;
+          const marketValueNzd = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
+          const costNzd = marketValueUsd
+            ? totalCostUsd * (marketValueNzd / marketValueUsd)
+            : 0;
+          totalSpent += costNzd;
+          totalValue += marketValueNzd;
+        });
+        const totalProfit = totalValue - totalSpent;
 
-            // build a card
-            const card = document.createElement('div');
-            card.className = 'chart-card';
-            card.innerHTML = `
-              <h2>${row.Ticker}</h2>
-              <div class="chart-container">
-                <canvas id="chart-${row.Ticker}"></canvas>
-              </div>
-            `;
-            dashboard.appendChild(card);
+        // summary card
+        const summaryCard = document.createElement('div');
+        summaryCard.className = 'chart-card';
+        summaryCard.innerHTML = `
+          <h2>Portfolio Summary</h2>
+          <div class="summary-content">
+            <p>Amount spent: NZD $${totalSpent.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
+            <p>Profit: NZD $${totalProfit.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
+            <p>Total value: NZD $${totalValue.toLocaleString(undefined, {minimumFractionDigits:2})}</p>
+          </div>
+        `;
+        dashboard.appendChild(summaryCard);
 
-            // render chart
-            new Chart(
-              document.getElementById(`chart-${row.Ticker}`),
-              {
-                type: 'bar',
-                data: {
-                  labels: ['Price/share', 'Total value'],
-                  datasets: [
-                    {
-                      label: 'Avg cost (USD)',
-                      data: [avgCostUsd, null],
-                      yAxisID: 'USD',
-                      backgroundColor: 'rgba(54,162,235,0.6)'
-                    },
-                    {
-                      label: 'Current price (USD)',
-                      data: [priceUsd, null],
-                      yAxisID: 'USD',
-                      backgroundColor: 'rgba(255,159,64,0.6)'
-                    },
-                    {
-                      label: 'Total cost (NZD)',
-                      data: [null, costNzd],
-                      yAxisID: 'NZD',
-                      backgroundColor: 'rgba(75,192,192,0.6)'
-                    },
-                    {
-                      label: 'Market value (NZD)',
-                      data: [null, marketValueNzd],
-                      yAxisID: 'NZD',
-                      backgroundColor: 'rgba(153,102,255,0.6)'
-                    }
-                  ]
+        // one card per holding
+        rows.forEach(r => {
+          const avgCostUsd     = parseFloat(r['Average cost'].replace(/[^\d.-]/g,'')) || 0;
+          const priceUsd       = parseFloat(r.Price.replace(/[^\d.-]/g,''))      || 0;
+          const totalCostUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
+          const marketValueUsd = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 0;
+          const marketValueNzd = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
+          const costNzd = marketValueUsd
+            ? totalCostUsd * (marketValueNzd / marketValueUsd)
+            : 0;
+
+          const card = document.createElement('div');
+          card.className = 'chart-card';
+          card.innerHTML = `
+            <h2>${r.Ticker}</h2>
+            <div class="chart-container">
+              <canvas id="chart-${r.Ticker}"></canvas>
+            </div>
+          `;
+          dashboard.appendChild(card);
+
+          new Chart(document.getElementById(`chart-${r.Ticker}`), {
+            type: 'bar',
+            data: {
+              labels: ['Price/share', 'Total value'],
+              datasets: [
+                {
+                  label: 'Avg cost (USD)',
+                  data: [avgCostUsd, null],
+                  yAxisID: 'USD',
+                  backgroundColor: 'rgba(54,162,235,0.6)'
                 },
-                options: {
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    USD: {
-                      type: 'linear',
-                      position: 'left',
-                      title: { display: true, text: 'USD' }
-                    },
-                    NZD: {
-                      type: 'linear',
-                      position: 'right',
-                      title: { display: true, text: 'NZD' },
-                      grid: { drawOnChartArea: false },
-                      ticks: {
-                        callback: v => '$' + v.toLocaleString()
-                      }
-                    }
-                  },
-                  plugins: {
-                    tooltip: {
-                      callbacks: {
-                        label: ctx => {
-                          const val = ctx.parsed.y || 0;
-                          const unit = ctx.dataset.yAxisID;
-                          return `${ctx.dataset.label}: ${unit} $${val.toLocaleString()}`;
-                        }
-                      }
-                    },
-                    legend: { position: 'bottom' }
+                {
+                  label: 'Current price (USD)',
+                  data: [priceUsd, null],
+                  yAxisID: 'USD',
+                  backgroundColor: 'rgba(255,159,64,0.6)'
+                },
+                {
+                  label: 'Total cost (NZD)',
+                  data: [null, costNzd],
+                  yAxisID: 'NZD',
+                  backgroundColor: 'rgba(75,192,192,0.6)'
+                },
+                {
+                  label: 'Market value (NZD)',
+                  data: [null, marketValueNzd],
+                  yAxisID: 'NZD',
+                  backgroundColor: 'rgba(153,102,255,0.6)'
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                USD: {
+                  type: 'linear',
+                  position: 'left',
+                  title: { display: true, text: 'USD' }
+                },
+                NZD: {
+                  type: 'linear',
+                  position: 'right',
+                  title: { display: true, text: 'NZD' },
+                  grid: { drawOnChartArea: false },
+                  ticks: {
+                    callback: v => '$' + v.toLocaleString()
                   }
                 }
+              },
+              plugins: {
+                tooltip: {
+                  callbacks: {
+                    label: ctx => {
+                      const v = ctx.parsed.y || 0;
+                      const unit = ctx.dataset.yAxisID;
+                      return `${ctx.dataset.label}: ${unit} $${v.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+                    }
+                  }
+                },
+                legend: { position: 'bottom' }
               }
-            );
+            }
           });
+        });
       },
       error: err => console.error('CSV load error:', err)
     });
