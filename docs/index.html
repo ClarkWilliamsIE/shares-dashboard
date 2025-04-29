@@ -81,8 +81,11 @@
     }
     .chart-container {
       position: relative;
-      flex: 1;
+      margin-bottom: 1rem;
       height: 200px;
+    }
+    .chart-container:last-child {
+      margin-bottom: 0;
     }
     .chart-container canvas {
       width: 100% !important;
@@ -152,7 +155,7 @@
       const barCard = document.createElement('div');
       barCard.className = 'chart-card';
       barCard.innerHTML = `
-        <h2>Summary (NZD${memberView?' per member':''})</h2>
+        <h2>Portfolio Summary (NZD${memberView?' per member':''})</h2>
         <div class="chart-container"><canvas id="summaryBar"></canvas></div>
       `;
       dashboard.appendChild(barCard);
@@ -202,7 +205,63 @@
         }
       });
 
-      // one card per holding
+      // --- History chart (total portfolio value over time) ---
+      const historyUrl = 'https://docs.google.com/spreadsheets/d/1_imBoJQnWkoWkG3PW8TUYyiZfQhRSfFfezzS4AnKs0A/edit?gid=1775944686#gid=1775944686';
+      Papa.parse(historyUrl, {
+        download: true, header: true,
+        complete: ({ data }) => {
+          const historyPoints = data.map(r => ({
+            x: new Date(r.Timestamp),
+            y: parseFloat(r[Object.keys(r)[1]])  // Assuming portfolio value is in 2nd column
+          }));
+
+          // Render portfolio history line chart
+          const historyCard = document.createElement('div');
+          historyCard.className = 'chart-card';
+          historyCard.innerHTML = `
+            <h2>Portfolio Market Value Over Time</h2>
+            <div class="chart-container">
+              <canvas id="historyChart"></canvas>
+            </div>
+          `;
+          dashboard.appendChild(historyCard);
+
+          new Chart(document.getElementById('historyChart'), {
+            type: 'line',
+            data: {
+              datasets: [{
+                label: 'Portfolio Market Value (NZD)',
+                data: historyPoints,
+                borderColor: 'rgba(75,192,192,0.8)',
+                backgroundColor: 'rgba(75,192,192,0.4)',
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 3,
+                fill: true
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: {
+                  type: 'time',
+                  time: { unit: 'day', tooltipFormat: 'll' },
+                  title: { display: true, text: 'Date' }
+                },
+                y: {
+                  title: { display: true, text: 'NZD' },
+                  ticks: {
+                    callback: value => '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 })
+                  }
+                }
+              }
+            }
+          });
+        }
+      });
+
+      // --- Individual holding cards ---
       rawRows.forEach(r => {
         const tcUsd    = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,''))       || 0;
         const mvUsd    = parseFloat(r['Market Value'].replace(/[^\d.-]/g,''))    || 0;
@@ -295,4 +354,3 @@
   </script>
 </body>
 </html>
-
