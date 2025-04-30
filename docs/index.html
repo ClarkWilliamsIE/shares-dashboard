@@ -131,9 +131,10 @@
       dashboard.innerHTML = '';
 
       // --- PORTFOLIO MARKET VALUE OVER TIME ---
+      // Fetch portfolio market value and date from columns M and N
       const historyData = rawRows.map(r => ({
-        x: new Date(r.Date),
-        y: parseFloat(r['N']) || 0
+        x: new Date(r['Date']),  // Column M: Date
+        y: parseFloat(r['N']) || 0 // Column N: Portfolio value
       }));
 
       // History chart card
