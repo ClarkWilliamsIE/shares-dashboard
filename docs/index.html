@@ -130,7 +130,58 @@
       const dashboard = document.getElementById('dashboard');
       dashboard.innerHTML = '';
 
-      // compute totals
+      // --- PORTFOLIO MARKET VALUE OVER TIME ---
+      const historyData = rawRows.map(r => ({
+        x: new Date(r.Date),
+        y: parseFloat(r['N']) || 0
+      }));
+
+      // History chart card
+      const historyCard = document.createElement('div');
+      historyCard.className = 'chart-card';
+      historyCard.innerHTML = `
+        <h2>Portfolio Market Value Over Time</h2>
+        <div class="chart-container">
+          <canvas id="historyChart"></canvas>
+        </div>
+      `;
+      dashboard.appendChild(historyCard);
+
+      // render history chart (line)
+      new Chart(document.getElementById('historyChart'), {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: 'Portfolio Market Value (NZD)',
+            data: historyData,
+            borderColor: 'rgba(75,192,192,0.8)',
+            backgroundColor: 'rgba(75,192,192,0.4)',
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              type: 'time',
+              time: { unit: 'day', tooltipFormat: 'll' },
+              title: { display: true, text: 'Date' }
+            },
+            y: {
+              title: { display: true, text: 'NZD' },
+              ticks: {
+                callback: value => '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 })
+              }
+            }
+          }
+        }
+      });
+
+      // --- PIE chart and BAR chart ---
       let totalSpent = 0, totalValue = 0;
       rawRows.forEach(r => {
         const tcUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
@@ -142,7 +193,7 @@
       });
       const totalProfit = totalValue - totalSpent;
 
-      // PIE card
+      // PIE chart card
       const pieCard = document.createElement('div');
       pieCard.className = 'chart-card';
       pieCard.innerHTML = `
@@ -151,7 +202,7 @@
       `;
       dashboard.appendChild(pieCard);
 
-      // BAR card
+      // BAR chart card
       const barCard = document.createElement('div');
       barCard.className = 'chart-card';
       barCard.innerHTML = `
@@ -202,62 +253,6 @@
             }
           },
           plugins:{ legend:{ display:false } }
-        }
-      });
-
-      // --- History chart (total portfolio value over time) ---
-      const historyUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1775944686&single=true&output=csv';
-      Papa.parse(historyUrl, {
-        download: true, header: true,
-        complete: ({ data }) => {
-          const historyPoints = data.map(r => ({
-            x: new Date(r.Timestamp),
-            y: parseFloat(r[Object.keys(r)[1]])  // Assuming portfolio value is in 2nd column
-          }));
-
-          // Render portfolio history line chart
-          const historyCard = document.createElement('div');
-          historyCard.className = 'chart-card';
-          historyCard.innerHTML = `
-            <h2>Portfolio Market Value Over Time</h2>
-            <div class="chart-container">
-              <canvas id="historyChart"></canvas>
-            </div>
-          `;
-          dashboard.appendChild(historyCard);
-
-          new Chart(document.getElementById('historyChart'), {
-            type: 'line',
-            data: {
-              datasets: [{
-                label: 'Portfolio Market Value (NZD)',
-                data: historyPoints,
-                borderColor: 'rgba(75,192,192,0.8)',
-                backgroundColor: 'rgba(75,192,192,0.4)',
-                borderWidth: 2,
-                tension: 0.3,
-                pointRadius: 3,
-                fill: true
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                x: {
-                  type: 'time',
-                  time: { unit: 'day', tooltipFormat: 'll' },
-                  title: { display: true, text: 'Date' }
-                },
-                y: {
-                  title: { display: true, text: 'NZD' },
-                  ticks: {
-                    callback: value => '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 })
-                  }
-                }
-              }
-            }
-          });
         }
       });
 
@@ -354,4 +349,3 @@
   </script>
 </body>
 </html>
-
