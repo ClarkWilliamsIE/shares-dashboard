@@ -73,7 +73,6 @@
       padding: 1rem;
       display: flex;
       flex-direction: column;
-      transition: background-color 0.3s, border-color 0.3s; /* Smooth transition */
     }
     .chart-card h2 {
       margin: 0 0 0.5rem;
@@ -113,7 +112,9 @@
       download: true,
       header: true,
       complete: ({ data }) => {
-        rawRows = data.filter(r => r.Ticker);
+        // Filter out rows where the quantity is 0 or less (no longer owned shares)
+        rawRows = data.filter(r => parseFloat(r['QTY']) > 0 && r.Ticker);
+
         // render initial view
         renderCharts(false);
         // toggle handler
@@ -306,5 +307,4 @@
   </script>
 </body>
 </html>
-
 
