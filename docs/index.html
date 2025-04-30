@@ -73,6 +73,7 @@
       padding: 1rem;
       display: flex;
       flex-direction: column;
+      transition: background-color 0.3s, border-color 0.3s; /* Smooth transition */
     }
     .chart-card h2 {
       margin: 0 0 0.5rem;
@@ -227,9 +228,9 @@
         // Change background color for profit/loss
         const chartContainer = card.querySelector('.chart-container');
         if (profitNzd >= 0) {
-          chartContainer.style.backgroundColor = 'rgba(144, 238, 144, 0.2)'; // light green
+          card.style.backgroundColor = 'rgba(144, 238, 144, 0.3)'; // light green
         } else {
-          chartContainer.style.backgroundColor = 'rgba(255, 99, 132, 0.2)'; // light red
+          card.style.backgroundColor = 'rgba(255, 99, 132, 0.3)'; // light red
         }
 
         // mixed NZD bars + % line
@@ -305,4 +306,5 @@
   </script>
 </body>
 </html>
+
 
