@@ -7,10 +7,6 @@
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <!-- Include Chart.js Time Adapter -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-
   <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 
@@ -85,11 +81,8 @@
     }
     .chart-container {
       position: relative;
-      margin-bottom: 1rem;
+      flex: 1;
       height: 200px;
-    }
-    .chart-container:last-child {
-      margin-bottom: 0;
     }
     .chart-container canvas {
       width: 100% !important;
@@ -97,7 +90,6 @@
     }
   </style>
 </head>
-
 
 <body>
   <h1>Winnerland!</h1>
@@ -112,7 +104,7 @@
 
   <script>
     const csvUrl =
-      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pubhtml?gid=1666283294&single=true';
+      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
     let rawRows = [];
 
@@ -135,59 +127,7 @@
       const dashboard = document.getElementById('dashboard');
       dashboard.innerHTML = '';
 
-      // --- PORTFOLIO MARKET VALUE OVER TIME ---
-      // Fetch portfolio market value and date from columns M and N
-      const historyData = rawRows.map(r => ({
-        x: new Date(r['Date']),  // Column M: Date
-        y: parseFloat(r['N']) || 0 // Column N: Portfolio value
-      }));
-
-      // History chart card
-      const historyCard = document.createElement('div');
-      historyCard.className = 'chart-card';
-      historyCard.innerHTML = `
-        <h2>Portfolio Market Value Over Time</h2>
-        <div class="chart-container">
-          <canvas id="historyChart"></canvas>
-        </div>
-      `;
-      dashboard.appendChild(historyCard);
-
-      // render history chart (line)
-      new Chart(document.getElementById('historyChart'), {
-        type: 'line',
-        data: {
-          datasets: [{
-            label: 'Portfolio Market Value (NZD)',
-            data: historyData,
-            borderColor: 'rgba(75,192,192,0.8)',
-            backgroundColor: 'rgba(75,192,192,0.4)',
-            borderWidth: 2,
-            tension: 0.3,
-            pointRadius: 3,
-            fill: true
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              type: 'time',
-              time: { unit: 'day', tooltipFormat: 'll' },
-              title: { display: true, text: 'Date' }
-            },
-            y: {
-              title: { display: true, text: 'NZD' },
-              ticks: {
-                callback: value => '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 })
-              }
-            }
-          }
-        }
-      });
-
-      // --- PIE chart and BAR chart ---
+      // compute totals
       let totalSpent = 0, totalValue = 0;
       rawRows.forEach(r => {
         const tcUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
@@ -199,7 +139,7 @@
       });
       const totalProfit = totalValue - totalSpent;
 
-      // PIE chart card
+      // PIE card
       const pieCard = document.createElement('div');
       pieCard.className = 'chart-card';
       pieCard.innerHTML = `
@@ -208,7 +148,7 @@
       `;
       dashboard.appendChild(pieCard);
 
-      // BAR chart card
+      // BAR card
       const barCard = document.createElement('div');
       barCard.className = 'chart-card';
       barCard.innerHTML = `
@@ -262,7 +202,7 @@
         }
       });
 
-      // --- Individual holding cards ---
+      // one card per holding
       rawRows.forEach(r => {
         const tcUsd    = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,''))       || 0;
         const mvUsd    = parseFloat(r['Market Value'].replace(/[^\d.-]/g,''))    || 0;
@@ -273,6 +213,7 @@
         const profitNzd= mvNzd - costNzd;
         const pctChange= parseFloat(r['% Change'].replace(/[^\d.-]/g,''))        || 0;
 
+        // create card
         const card = document.createElement('div');
         card.className = 'chart-card';
         card.innerHTML = `
@@ -283,6 +224,15 @@
         `;
         dashboard.appendChild(card);
 
+        // Change background color for profit/loss
+        const chartContainer = card.querySelector('.chart-container');
+        if (profitNzd >= 0) {
+          chartContainer.style.backgroundColor = 'rgba(144, 238, 144, 0.2)'; // light green
+        } else {
+          chartContainer.style.backgroundColor = 'rgba(255, 99, 132, 0.2)'; // light red
+        }
+
+        // mixed NZD bars + % line
         new Chart(document.getElementById(`chart-${r.Ticker}`), {
           data:{
             labels:['Cost','Value','Profit','% Change'],
@@ -355,3 +305,4 @@
   </script>
 </body>
 </html>
+
