@@ -116,11 +116,19 @@
         // Filter out rows where quantity is 0 or less (no longer owned shares)
         rawRows = data.filter(r => parseFloat(r['QTY']) > 0 && r.Ticker);
 
-        // Extract portfolio values for the line chart (from column N for value and column M for date)
-        portfolioData = data.map(row => ({
-          date: row['Date'] || row['M'],  // Use 'M' for date column
-          portfolioValue: parseFloat(row['N']) || 0  // Use 'N' for portfolio value column
-        }));
+        // Extract portfolio values for the line chart (from column M for date and column N for value)
+        portfolioData = data.map(row => {
+          const date = row['M']; // column M for date
+          const portfolioValue = parseFloat(row['N']) || 0;  // column N for portfolio value
+          
+          // log date and portfolio value to verify
+          console.log(`Date: ${date}, Portfolio Value: ${portfolioValue}`);
+          
+          return {
+            date: date,  // Store the raw date for display on the chart
+            portfolioValue: portfolioValue  // Store the portfolio value
+          };
+        });
 
         // Render charts
         renderCharts(false);
