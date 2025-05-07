@@ -113,15 +113,21 @@
       download: true,
       header: true,
       complete: ({ data }) => {
+        // Log raw data to inspect the columns
+        console.log("Raw data:", data);
+
         // Filter out rows where quantity is 0 or less (no longer owned shares)
         rawRows = data.filter(r => parseFloat(r['QTY']) > 0 && r.Ticker);
+
+        // Log filtered data
+        console.log("Filtered data (own shares):", rawRows);
 
         // Extract portfolio values for the line chart (from column M for date and column N for value)
         portfolioData = data.map(row => {
           const date = row['M']; // column M for date
           const portfolioValue = parseFloat(row['N']) || 0;  // column N for portfolio value
-          
-          // log date and portfolio value to verify
+
+          // Log date and portfolio value for debugging
           console.log(`Date: ${date}, Portfolio Value: ${portfolioValue}`);
           
           return {
@@ -362,4 +368,3 @@
   </script>
 </body>
 </html>
-
