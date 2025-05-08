@@ -113,19 +113,18 @@
       download: true,
       header: true,
       complete: ({ data }) => {
-        // Log raw data to inspect the columns
-        console.log("Raw data:", data);
-
         // Filter out rows where quantity is 0 or less (no longer owned shares)
         rawRows = data.filter(r => parseFloat(r['QTY']) > 0 && r.Ticker);
-
-        // Log filtered data
-        console.log("Filtered data (own shares):", rawRows);
 
         // Extract portfolio values for the line chart (from column M for date and column N for value)
         portfolioData = data.map(row => {
           const date = row['M']; // column M for date
           const portfolioValue = parseFloat(row['N']) || 0;  // column N for portfolio value
+          
+          // Exclude empty portfolio values (or zero)
+          if (!portfolioValue) {
+            return null; // If the portfolio value is empty or zero, discard this row
+          }
 
           // Log date and portfolio value for debugging
           console.log(`Date: ${date}, Portfolio Value: ${portfolioValue}`);
@@ -134,7 +133,10 @@
             date: date,  // Store the raw date for display on the chart
             portfolioValue: portfolioValue  // Store the portfolio value
           };
-        });
+        }).filter(row => row !== null);  // Filter out null values (empty or zero portfolio values)
+
+        // Log the portfolioData to ensure it's correct
+        console.log("Filtered Portfolio Data:", portfolioData);
 
         // Render charts
         renderCharts(false);
@@ -368,3 +370,4 @@
   </script>
 </body>
 </html>
+
