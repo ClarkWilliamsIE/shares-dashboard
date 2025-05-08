@@ -126,9 +126,6 @@
             return null; // If the portfolio value is empty or zero, discard this row
           }
 
-          // Log date and portfolio value for debugging
-          console.log(`Date: ${date}, Portfolio Value: ${portfolioValue}`);
-          
           return {
             date: date,  // Store the raw date for display on the chart
             portfolioValue: portfolioValue  // Store the portfolio value
@@ -138,120 +135,76 @@
         // Log the portfolioData to ensure it's correct
         console.log("Filtered Portfolio Data:", portfolioData);
 
+        // Process best and worst performers
+        const performanceData = calculatePerformance(portfolioData);
+        const bestPerformers = performanceData.bestPerformers;
+        const worstPerformers = performanceData.worstPerformers;
+
         // Render charts
-        renderCharts(false);
+        renderCharts(false, bestPerformers, worstPerformers);
         // Toggle handler
         document.getElementById('memberToggle')
-          .addEventListener('change', e => renderCharts(e.target.checked));
+          .addEventListener('change', e => renderCharts(e.target.checked, bestPerformers, worstPerformers));
       },
       error: err => console.error('CSV load error:', err)
     });
 
-    function renderCharts(memberView) {
+    // Function to calculate performance (top and bottom performers based on last week's data)
+    function calculatePerformance(data) {
+      // Assuming the portfolio data is ordered by date (most recent first)
+      const latestData = data[data.length - 1];  // Most recent data
+      const oneWeekAgo = data[data.length - 7];  // Data from 7 days ago (if available)
+
+      // Calculate the percentage change between the most recent and 7 days ago
+      const performanceData = data.map(row => {
+        const date = row.date;
+        const portfolioValue = row.portfolioValue;
+
+        // Calculate percentage change from one week ago
+        const change = oneWeekAgo ? ((portfolioValue - oneWeekAgo.portfolioValue) / oneWeekAgo.portfolioValue) * 100 : 0;
+
+        return {
+          date: date,
+          portfolioValue: portfolioValue,
+          change: change
+        };
+      });
+
+      // Sort performance data by percentage change (ascending and descending)
+      const sortedData = performanceData.sort((a, b) => b.change - a.change);  // Descending order
+
+      // Get the top 5 best performers and the worst performers
+      const bestPerformers = sortedData.slice(0, 5);
+      const worstPerformers = sortedData.slice(-5).reverse(); // Reverse to get the worst at the top
+
+      return { bestPerformers, worstPerformers };
+    }
+
+    function renderCharts(memberView, bestPerformers, worstPerformers) {
       const f = memberView ? 14 : 1;
       const dashboard = document.getElementById('dashboard');
       dashboard.innerHTML = '';
 
-      // compute totals
-      let totalSpent = 0, totalValue = 0;
-      rawRows.forEach(r => {
-        const tcUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
-        const mvUsd   = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 0;
-        const mvNzd   = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
-        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-        totalSpent += costNzd;
-        totalValue += mvNzd;
-      });
-      const totalProfit = totalValue - totalSpent;
-
-      // PIE card
-      const pieCard = document.createElement('div');
-      pieCard.className = 'chart-card';
-      pieCard.innerHTML = `
-        <h2>Allocation (NZD${memberView?' per member':''})</h2>
-        <div class="chart-container"><canvas id="summaryPie"></canvas></div>
+      // Add Top Performers Chart
+      const topChartCard = document.createElement('div');
+      topChartCard.className = 'chart-card';
+      topChartCard.innerHTML = `
+        <h2>Top Performers (Last Week)</h2>
+        <div class="chart-container"><canvas id="topPerformersChart"></canvas></div>
       `;
-      dashboard.appendChild(pieCard);
+      dashboard.appendChild(topChartCard);
 
-      // BAR card
-      const barCard = document.createElement('div');
-      barCard.className = 'chart-card';
-      barCard.innerHTML = `
-        <h2>Portfolio Summary (NZD${memberView?' per member':''})</h2>
-        <div class="chart-container"><canvas id="summaryBar"></canvas></div>
-      `;
-      dashboard.appendChild(barCard);
+      const topLabels = bestPerformers.map(r => r.date);
+      const topData = bestPerformers.map(r => r.change);
 
-      // Portfolio Value Line chart
-      const lineCard = document.createElement('div');
-      lineCard.className = 'chart-card';
-      lineCard.innerHTML = `
-        <h2>Portfolio Value Over Time</h2>
-        <div class="chart-container"><canvas id="portfolioValueLine"></canvas></div>
-      `;
-      dashboard.appendChild(lineCard);
-
-      const lineLabels = portfolioData.map(r => r.date);
-      const lineData = portfolioData.map(r => r.portfolioValue);
-
-      new Chart(document.getElementById('portfolioValueLine'), {
-        type: 'line',
-        data: {
-          labels: lineLabels,
-          datasets: [{
-            label: 'Portfolio Value (NZD)',
-            data: lineData,
-            fill: false,
-            borderColor: 'rgba(75,192,192,1)',
-            tension: 0.1
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                callback: function(value) {
-                  return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
-                }
-              }
-            }
-          }
-        }
-      });
-
-      // PIE chart
-      const pieLabels = rawRows.map(r => r.Ticker);
-      const pieData = rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0) / f);
-      new Chart(document.getElementById('summaryPie'), {
-        type: 'doughnut',
-        data: { labels: pieLabels, datasets: [{ data: pieData }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { position: 'right' } }
-        }
-      });
-
-      // BAR chart
-      new Chart(document.getElementById('summaryBar'), {
+      new Chart(document.getElementById('topPerformersChart'), {
         type: 'bar',
         data: {
-          labels: ['Spent', 'Profit', 'Value'],
+          labels: topLabels,
           datasets: [{
-            label: 'NZD',
-            data: [
-              totalSpent / f,
-              totalProfit / f,
-              totalValue / f
-            ],
-            backgroundColor: [
-              'rgba(54,162,235,0.6)',
-              'rgba(255,205,86,0.6)',
-              'rgba(75,192,192,0.6)'
-            ]
+            label: 'Percentage Change',
+            data: topData,
+            backgroundColor: 'rgba(75,192,192,0.6)'
           }]
         },
         options: {
@@ -260,111 +213,44 @@
           scales: {
             y: {
               beginAtZero: true,
-              ticks: { callback: v => '$' + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) }
+              ticks: { callback: function(value) { return value.toFixed(2) + '%' } }
             }
-          },
-          plugins: { legend: { display: false } }
+          }
         }
       });
 
-      // one card per holding
-      rawRows.forEach(r => {
-        const tcUsd = parseFloat(r['Total Cost'].replace(/[^\d.-]/g, '')) || 0;
-        const mvUsd = parseFloat(r['Market Value'].replace(/[^\d.-]/g, '')) || 0;
-        const mvNzd = parseFloat(r['NZD'].replace(/[^\d.-]/g, '')) || 0;
-        const avgUsd = parseFloat(r['Average cost'].replace(/[^\d.-]/g, '')) || 0;
-        const priceUsd = parseFloat(r.Price.replace(/[^\d.-]/g, '')) || 0;
-        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-        const profitNzd = mvNzd - costNzd;
-        const pctChange = parseFloat(r['% Change'].replace(/[^\d.-]/g, '')) || 0;
+      // Add Worst Performers Chart
+      const worstChartCard = document.createElement('div');
+      worstChartCard.className = 'chart-card';
+      worstChartCard.innerHTML = `
+        <h2>Worst Performers (Last Week)</h2>
+        <div class="chart-container"><canvas id="worstPerformersChart"></canvas></div>
+      `;
+      dashboard.appendChild(worstChartCard);
 
-        // create card
-        const card = document.createElement('div');
-        card.className = 'chart-card';
-        card.innerHTML = `
-          <h2>${r.Ticker}</h2>
-          <div class="chart-container">
-            <canvas id="chart-${r.Ticker}"></canvas>
-          </div>
-        `;
-        dashboard.appendChild(card);
+      const worstLabels = worstPerformers.map(r => r.date);
+      const worstData = worstPerformers.map(r => r.change);
 
-        // Change background color for profit/loss
-        const chartContainer = card.querySelector('.chart-container');
-        if (profitNzd >= 0) {
-          card.style.backgroundColor = 'rgba(144, 238, 144, 0.3)'; // light green
-        } else {
-          card.style.backgroundColor = 'rgba(255, 99, 132, 0.3)'; // light red
-        }
-
-        // mixed NZD bars + % line
-        new Chart(document.getElementById(`chart-${r.Ticker}`), {
-          data: {
-            labels: ['Cost', 'Value', 'Profit', '% Change'],
-            datasets: [
-              {
-                type: 'bar',
-                label: 'NZD',
-                data: [
-                  costNzd / f,
-                  mvNzd / f,
-                  profitNzd / f,
-                  null
-                ],
-                backgroundColor: [
-                  'rgba(54,162,235,0.6)',
-                  'rgba(75,192,192,0.6)',
-                  'rgba(255,205,86,0.6)'
-                ]
-              },
-              {
-                type: 'line',
-                label: '% Change',
-                data: [
-                  null, null, null,
-                  pctChange
-                ],
-                yAxisID: 'PCT',
-                borderColor: 'rgba(255,99,132,0.8)',
-                backgroundColor: 'rgba(255,99,132,0.4)',
-                tension: 0.3,
-                pointRadius: 4,
-                fill: false
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: 'NZD' },
-                ticks: { callback: v => '$' + v.toLocaleString() }
-              },
-              PCT: {
-                type: 'linear',
-                position: 'right',
-                title: { display: true, text: '% Change' },
-                grid: { drawOnChartArea: false },
-                ticks: { callback: v => v + '%' }
-              }
-            },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: ctx => {
-                    if (ctx.dataset.type === 'line') {
-                      return `% Change: ${ctx.parsed.y}%`;
-                    }
-                    return `NZD $${ctx.parsed.y.toLocaleString()}`;
-                  }
-                }
-              },
-              legend: { position: 'bottom' }
+      new Chart(document.getElementById('worstPerformersChart'), {
+        type: 'bar',
+        data: {
+          labels: worstLabels,
+          datasets: [{
+            label: 'Percentage Change',
+            data: worstData,
+            backgroundColor: 'rgba(255,99,132,0.6)'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { callback: function(value) { return value.toFixed(2) + '%' } }
             }
           }
-        });
+        }
       });
     }
   </script>
