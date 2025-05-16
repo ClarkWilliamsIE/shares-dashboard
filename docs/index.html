@@ -9,6 +9,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+  <!-- TailwindCSS and Flowbite -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flowbite@1.4.7/dist/flowbite.min.js"></script>
 
   <style>
     body {
@@ -92,6 +95,11 @@
       width: 100% !important;
       height: 100% !important;
     }
+    /* Range slider */
+    .range-slider {
+      margin-top: 1rem;
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 
@@ -105,6 +113,12 @@
     <span>Member view</span>
   </div>
   <div class="dashboard" id="dashboard"></div>
+
+  <!-- Range Slider for Zoom -->
+  <div style="text-align:center;">
+    <label for="zoomRange" class="text-white">Zoom in/out on Portfolio Value</label>
+    <input type="range" id="zoomRange" min="1" max="100" value="100" class="range-slider w-full">
+  </div>
 
   <script>
     const csvUrl =
@@ -141,6 +155,12 @@
         // Toggle handler
         document.getElementById('memberToggle')
           .addEventListener('change', e => renderCharts(e.target.checked));
+
+        // Range Slider Zoom handler
+        document.getElementById('zoomRange').addEventListener('input', (e) => {
+          const zoomValue = e.target.value;
+          updateChartZoom(zoomValue);
+        });
       },
       error: err => console.error('CSV load error:', err)
     });
@@ -197,7 +217,7 @@
       const maxValue = Math.max(...lineData);
       const margin = (maxValue - minValue) * 0.1;  // Add 10% margin above and below
 
-      new Chart(document.getElementById('portfolioValueLine'), {
+      const chart = new Chart(document.getElementById('portfolioValueLine'), {
         type: 'line',
         data: {
           labels: lineLabels,
@@ -242,7 +262,7 @@
         }
       });
 
-      // PIE chart with sleek colors
+      // PIE chart
       const pieLabels = rawRows.map(r => r.Ticker);
       const pieData = rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0) / f);
       new Chart(document.getElementById('summaryPie'), {
@@ -267,7 +287,7 @@
         }
       });
 
-      // BAR chart with updated color palette
+      // BAR chart
       new Chart(document.getElementById('summaryBar'), {
         type: 'bar',
         data: {
@@ -280,9 +300,9 @@
               totalValue / f
             ],
             backgroundColor: [
-              'rgb(49, 130, 206)',  // Muted Blue for Spent
-              'rgb(30, 136, 229)',   // Bright Blue for Profit
-              'rgb(241, 101, 71)'    // Base Orange for Value
+              'rgba(54,162,235,0.6)',
+              'rgba(255,205,86,0.6)',
+              'rgba(75,192,192,0.6)'
             ]
           }]
         },
@@ -342,7 +362,7 @@
           card.style.border = '3px solid #dc3545';  // Red border for loss
         }
 
-        // mixed NZD bars + % line with updated colors
+        // mixed NZD bars + % line
         new Chart(document.getElementById(`chart-${r.Ticker}`), {
           data: {
             labels: ['Cost', 'Value', 'Profit', '% Change'],
@@ -357,9 +377,9 @@
                   null
                 ],
                 backgroundColor: [
-                  'rgb(49, 130, 206)',  // Muted Blue for Cost
-                  'rgb(30, 136, 229)',   // Bright Blue for Value
-                  'rgb(241, 101, 71)'    // Base Orange for Profit
+                  'rgba(54,162,235,0.6)',
+                  'rgba(75,192,192,0.6)',
+                  'rgba(255,205,86,0.6)'
                 ]
               },
               {
@@ -413,6 +433,21 @@
         });
       });
     }
+
+    // Update chart zoom range dynamically based on range slider
+    function updateChartZoom(zoomValue) {
+      const zoomFactor = zoomValue / 100;
+      const visibleData = portfolioData.slice(0, Math.floor(portfolioData.length * zoomFactor));
+
+      // Re-render chart with updated data based on zoom factor
+      const chart = Chart.instances.find(c => c.chart.canvas.id === 'portfolioValueLine');
+      if (chart) {
+        chart.data.labels = visibleData.map(r => r.date);
+        chart.data.datasets[0].data = visibleData.map(r => r.portfolioValue);
+        chart.update();
+      }
+    }
   </script>
 </body>
 </html>
+
