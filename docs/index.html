@@ -5,17 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Winnerland!</title>
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Flowbite -->
-  <script src="https://cdn.jsdelivr.net/npm/flowbite@1.4.7/dist/flowbite.js"></script>
-  
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  
   <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+  <!-- Flowbite for dropdown and other components -->
+  <script src="https://cdn.jsdelivr.net/npm/flowbite@1.4.0/dist/flowbite.min.js"></script>
 
   <style>
     body {
@@ -82,7 +77,6 @@
       padding: 1rem;
       display: flex;
       flex-direction: column;
-      border: 3px solid transparent; /* Default border (transparent initially) */
     }
     .chart-card h2 {
       margin: 0 0 0.5rem;
@@ -98,6 +92,50 @@
     .chart-container canvas {
       width: 100% !important;
       height: 100% !important;
+    }
+
+    /* Flowbite card styling */
+    .flowbite-card {
+      max-width: 600px;
+      width: 100%;
+      background: #1f2937; /* Dark background */
+      border-radius: 0.75rem;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+
+    .flowbite-card h5 {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .flowbite-card .text-gray-500 {
+      color: #c1c1c1;
+    }
+
+    .flowbite-card .text-green-500 {
+      color: #10b981; /* Green text for positive changes */
+    }
+
+    .flowbite-card .dropdown-button {
+      padding: 8px 15px;
+      border-radius: 0.375rem;
+      background: #374151;
+      color: #fff;
+      cursor: pointer;
+      border: none;
+    }
+
+    .flowbite-card .dropdown-menu {
+      position: absolute;
+      top: 80%;
+      left: 0;
+      width: 200px;
+      background: #1f2937;
+      border-radius: 0.75rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      padding: 1rem;
     }
   </style>
 </head>
@@ -169,50 +207,54 @@
       });
       const totalProfit = totalValue - totalSpent;
 
-      // PIE card
-      const pieCard = document.createElement('div');
-      pieCard.className = 'chart-card';
-      pieCard.innerHTML = `
-        <h2>Allocation (NZD${memberView?' per member':''})</h2>
-        <div class="chart-container"><canvas id="summaryPie"></canvas></div>
+      // Flowbite card for portfolio value over time
+      const flowbiteCard = document.createElement('div');
+      flowbiteCard.className = 'flowbite-card';
+      flowbiteCard.innerHTML = `
+        <div class="flex justify-between">
+          <div>
+            <h5 class="leading-none text-3xl font-bold text-white pb-2">Portfolio Value</h5>
+            <p class="text-base font-normal text-gray-500 dark:text-gray-400">Over Time</p>
+          </div>
+          <div class="flex items-center px-2.5 py-0.5 text-base font-semibold text-green-500 dark:text-green-500 text-center">
+            12%
+            <svg class="w-3 h-3 ms-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 14">
+              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13V1m0 0L1 5m4-4 4 4"/>
+            </svg>
+          </div>
+        </div>
+        <div id="area-chart"></div>
+        <div class="grid grid-cols-1 items-center border-gray-200 border-t dark:border-gray-700 justify-between">
+          <div class="flex justify-between items-center pt-5">
+            <button
+              id="dropdownDefaultButton"
+              data-dropdown-toggle="lastDaysdropdown"
+              data-dropdown-placement="bottom"
+              class="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-900 text-center inline-flex items-center dark:hover:text-white"
+              type="button">
+              Last 7 days
+              <svg class="w-2.5 m-2.5 ms-1.5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
+              </svg>
+            </button>
+          </div>
+        </div>
       `;
-      dashboard.appendChild(pieCard);
-
-      // BAR card
-      const barCard = document.createElement('div');
-      barCard.className = 'chart-card';
-      barCard.innerHTML = `
-        <h2>Portfolio Summary (NZD${memberView?' per member':''})</h2>
-        <div class="chart-container"><canvas id="summaryBar"></canvas></div>
-      `;
-      dashboard.appendChild(barCard);
-
-      // Portfolio Value Line chart
-      const lineCard = document.createElement('div');
-      lineCard.className = 'chart-card';
-      lineCard.innerHTML = `
-        <h2>Portfolio Value Over Time</h2>
-        <div class="chart-container"><canvas id="portfolioValueLine"></canvas></div>
-      `;
-      dashboard.appendChild(lineCard);
+      dashboard.appendChild(flowbiteCard);
 
       const lineLabels = portfolioData.map(r => r.date);
       const lineData = portfolioData.map(r => r.portfolioValue);
 
-      // Find the min and max values to dynamically adjust the y-axis
-      const minValue = Math.min(...lineData);
-      const maxValue = Math.max(...lineData);
-      const margin = (maxValue - minValue) * 0.1;  // Add 10% margin above and below
-
-      new Chart(document.getElementById('portfolioValueLine'), {
+      new Chart(document.getElementById('area-chart'), {
         type: 'line',
         data: {
           labels: lineLabels,
           datasets: [{
             label: 'Portfolio Value (NZD)',
             data: lineData,
-            fill: false,
+            fill: true, // Area chart effect
             borderColor: 'rgba(75,192,192,1)',
+            backgroundColor: 'rgba(75,192,192,0.2)',
             tension: 0.1
           }]
         },
@@ -221,16 +263,11 @@
           maintainAspectRatio: false,
           scales: {
             y: {
-              min: minValue - margin,  // Set the min value with margin
-              max: maxValue + margin,  // Set the max value with margin
+              beginAtZero: false,
               ticks: {
                 callback: function(value) {
                   return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
                 }
-              },
-              grid: {
-                color: '#444',  // Dark grid lines
-                borderColor: '#444'  // Dark grid border color
               }
             },
             x: {
@@ -238,186 +275,8 @@
                 color: '#444',  // Dark x-axis grid lines
               }
             }
-          },
-          plugins: {
-            legend: {
-              labels: {
-                color: '#fff',  // White color for legend text
-              }
-            }
           }
         }
-      });
-
-      // PIE chart
-      const pieLabels = rawRows.map(r => r.Ticker);
-      const pieData = rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0) / f);
-      new Chart(document.getElementById('summaryPie'), {
-        type: 'doughnut',
-        data: { labels: pieLabels, datasets: [{ data: pieData }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { 
-            legend: {
-              position: 'right',
-              labels: {
-                color: '#fff',  // White color for legend text
-              }
-            }
-          },
-          elements: {
-            arc: {
-              borderWidth: 0, // Remove the white border around slices
-            }
-          }
-        }
-      });
-
-      // BAR chart
-      new Chart(document.getElementById('summaryBar'), {
-        type: 'bar',
-        data: {
-          labels: ['Spent', 'Profit', 'Value'],
-          datasets: [{
-            label: 'NZD',
-            data: [
-              totalSpent / f,
-              totalProfit / f,
-              totalValue / f
-            ],
-            backgroundColor: [
-              'rgba(54,162,235,0.6)',
-              'rgba(255,205,86,0.6)',
-              'rgba(75,192,192,0.6)'
-            ]
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: { callback: v => '$' + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) },
-              grid: {
-                color: '#444',  // Dark grid lines
-                borderColor: '#444'  // Dark grid border color
-              }
-            },
-            x: {
-              grid: {
-                color: '#444',  // Dark x-axis grid lines
-              }
-            }
-          },
-          plugins: { 
-            legend: { 
-              display: false 
-            } 
-          }
-        }
-      });
-
-      // one card per holding
-      rawRows.forEach(r => {
-        const tcUsd = parseFloat(r['Total Cost'].replace(/[^\d.-]/g, '')) || 0;
-        const mvUsd = parseFloat(r['Market Value'].replace(/[^\d.-]/g, '')) || 0;
-        const mvNzd = parseFloat(r['NZD'].replace(/[^\d.-]/g, '')) || 0;
-        const avgUsd = parseFloat(r['Average cost'].replace(/[^\d.-]/g, '')) || 0;
-        const priceUsd = parseFloat(r.Price.replace(/[^\d.-]/g, '')) || 0;
-        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-        const profitNzd = mvNzd - costNzd;
-        const pctChange = parseFloat(r['% Change'].replace(/[^\d.-]/g, '')) || 0;
-
-        // create card
-        const card = document.createElement('div');
-        card.className = 'chart-card';
-        card.innerHTML = `
-          <h2>${r.Ticker}</h2>
-          <div class="chart-container">
-            <canvas id="chart-${r.Ticker}"></canvas>
-          </div>
-        `;
-        dashboard.appendChild(card);
-
-        // Set border color based on profit/loss
-        const chartContainer = card.querySelector('.chart-container');
-        if (profitNzd >= 0) {
-          card.style.border = '3px solid #28a745';  // Green border for profit
-        } else {
-          card.style.border = '3px solid #dc3545';  // Red border for loss
-        }
-
-        // mixed NZD bars + % line
-        new Chart(document.getElementById(`chart-${r.Ticker}`), {
-          data: {
-            labels: ['Cost', 'Value', 'Profit', '% Change'],
-            datasets: [
-              {
-                type: 'bar',
-                label: 'NZD',
-                data: [
-                  costNzd / f,
-                  mvNzd / f,
-                  profitNzd / f,
-                  null
-                ],
-                backgroundColor: [
-                  'rgba(54,162,235,0.6)',
-                  'rgba(75,192,192,0.6)',
-                  'rgba(255,205,86,0.6)'
-                ]
-              },
-              {
-                type: 'line',
-                label: '% Change',
-                data: [
-                  null, null, null,
-                  pctChange
-                ],
-                yAxisID: 'PCT',
-                borderColor: 'rgba(255,99,132,0.8)',
-                backgroundColor: 'rgba(255,99,132,0.4)',
-                tension: 0.3,
-                pointRadius: 4,
-                fill: false
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: 'NZD' },
-                ticks: { callback: v => '$' + v.toLocaleString() },
-                grid: { color: '#444' }
-              },
-              PCT: {
-                type: 'linear',
-                position: 'right',
-                title: { display: true, text: '% Change' },
-                grid: { drawOnChartArea: false },
-                ticks: { callback: v => v + '%' }
-              }
-            },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: ctx => {
-                    if (ctx.dataset.type === 'line') {
-                      return `% Change: ${ctx.parsed.y}%`;
-                    }
-                    return `NZD $${ctx.parsed.y.toLocaleString()}`;
-                  }
-                }
-              },
-              legend: { position: 'bottom' }
-            }
-          }
-        });
       });
     }
   </script>
