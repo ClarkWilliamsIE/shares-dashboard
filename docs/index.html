@@ -283,6 +283,23 @@
           }
         }
       });
+
+      // Create a switch for TQQQ daily data toggle
+      const tqqqSwitch = document.createElement('div');
+      tqqqSwitch.className = 'chart-card';
+      tqqqSwitch.innerHTML = `
+        <label class="switch">
+          <input type="checkbox" id="tqqqToggle">
+          <span class="slider"></span>
+        </label>
+        <span>TQQQ Daily Chart</span>
+      `;
+      dashboard.appendChild(tqqqSwitch);
+
+      document.getElementById('tqqqToggle').addEventListener('change', (e) => {
+        document.getElementById('tqqqDailyChart').style.display = e.target.checked ? 'block' : 'none';
+      });
+
     }
   </script>
 </body>
