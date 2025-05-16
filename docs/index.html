@@ -5,13 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Winnerland!</title>
 
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Flowbite -->
+  <script src="https://cdn.jsdelivr.net/npm/flowbite@1.4.7/dist/flowbite.js"></script>
+  
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-  <!-- TailwindCSS and Flowbite -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/flowbite@1.4.7/dist/flowbite.min.js"></script>
 
   <style>
     body {
@@ -95,11 +99,6 @@
       width: 100% !important;
       height: 100% !important;
     }
-    /* Range slider */
-    .range-slider {
-      margin-top: 1rem;
-      margin-bottom: 1rem;
-    }
   </style>
 </head>
 
@@ -113,12 +112,6 @@
     <span>Member view</span>
   </div>
   <div class="dashboard" id="dashboard"></div>
-
-  <!-- Range Slider for Zoom -->
-  <div style="text-align:center;">
-    <label for="zoomRange" class="text-white">Zoom in/out on Portfolio Value</label>
-    <input type="range" id="zoomRange" min="1" max="100" value="100" class="range-slider w-full">
-  </div>
 
   <script>
     const csvUrl =
@@ -155,12 +148,6 @@
         // Toggle handler
         document.getElementById('memberToggle')
           .addEventListener('change', e => renderCharts(e.target.checked));
-
-        // Range Slider Zoom handler
-        document.getElementById('zoomRange').addEventListener('input', (e) => {
-          const zoomValue = e.target.value;
-          updateChartZoom(zoomValue);
-        });
       },
       error: err => console.error('CSV load error:', err)
     });
@@ -217,7 +204,7 @@
       const maxValue = Math.max(...lineData);
       const margin = (maxValue - minValue) * 0.1;  // Add 10% margin above and below
 
-      const chart = new Chart(document.getElementById('portfolioValueLine'), {
+      new Chart(document.getElementById('portfolioValueLine'), {
         type: 'line',
         data: {
           labels: lineLabels,
@@ -432,20 +419,6 @@
           }
         });
       });
-    }
-
-    // Update chart zoom range dynamically based on range slider
-    function updateChartZoom(zoomValue) {
-      const zoomFactor = zoomValue / 100;
-      const visibleData = portfolioData.slice(0, Math.floor(portfolioData.length * zoomFactor));
-
-      // Re-render chart with updated data based on zoom factor
-      const chart = Chart.instances.find(c => c.chart.canvas.id === 'portfolioValueLine');
-      if (chart) {
-        chart.data.labels = visibleData.map(r => r.date);
-        chart.data.datasets[0].data = visibleData.map(r => r.portfolioValue);
-        chart.update();
-      }
     }
   </script>
 </body>
