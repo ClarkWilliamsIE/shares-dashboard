@@ -242,7 +242,7 @@
         }
       });
 
-      // PIE chart
+      // PIE chart with sleek colors
       const pieLabels = rawRows.map(r => r.Ticker);
       const pieData = rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0) / f);
       new Chart(document.getElementById('summaryPie'), {
@@ -267,7 +267,7 @@
         }
       });
 
-      // BAR chart with new color palette
+      // BAR chart with updated color palette
       new Chart(document.getElementById('summaryBar'), {
         type: 'bar',
         data: {
@@ -280,9 +280,9 @@
               totalValue / f
             ],
             backgroundColor: [
-              'rgba(30, 136, 229, 0.8)',  // Blue for spent
-              'rgba(76, 175, 80, 0.8)',   // Green for profit
-              'rgba(255, 87, 34, 0.8)'    // Orange for value
+              'rgb(49, 130, 206)',  // Muted Blue for Spent
+              'rgb(30, 136, 229)',   // Bright Blue for Profit
+              'rgb(241, 101, 71)'    // Base Orange for Value
             ]
           }]
         },
@@ -342,7 +342,7 @@
           card.style.border = '3px solid #dc3545';  // Red border for loss
         }
 
-        // mixed NZD bars + % line
+        // mixed NZD bars + % line with updated colors
         new Chart(document.getElementById(`chart-${r.Ticker}`), {
           data: {
             labels: ['Cost', 'Value', 'Profit', '% Change'],
@@ -357,9 +357,9 @@
                   null
                 ],
                 backgroundColor: [
-                  'rgba(30, 136, 229, 0.8)',  // Blue for cost
-                  'rgba(76, 175, 80, 0.8)',   // Green for value
-                  'rgba(255, 87, 34, 0.8)'    // Orange for profit
+                  'rgb(49, 130, 206)',  // Muted Blue for Cost
+                  'rgb(30, 136, 229)',   // Bright Blue for Value
+                  'rgb(241, 101, 71)'    // Base Orange for Profit
                 ]
               },
               {
@@ -416,4 +416,3 @@
   </script>
 </body>
 </html>
-
