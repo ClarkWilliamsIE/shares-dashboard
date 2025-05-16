@@ -108,7 +108,26 @@
 
     let rawRows = [];
     let portfolioData = [];  // To hold the portfolio value data for the line chart
-    let dailyData = {};  // Store daily value changes for each stock
+
+    // Mocking daily recording for TQQQ (row 2)
+    let dailyRecord = []; // Will hold daily values for TQQQ
+    let currentPrice = 100; // Starting price for TQQQ (just for testing)
+    const recordFrequency = 5; // Frequency of adding a new price (every 5 seconds for testing)
+
+    setInterval(() => {
+      // Simulate a daily price change (for testing purposes, you can change this logic)
+      currentPrice += Math.random() * 5 - 2.5; // Simulate a small price fluctuation
+      const today = new Date().toLocaleDateString();
+
+      // Push the current price and date to the daily record
+      dailyRecord.push({ date: today, price: currentPrice });
+
+      // Log the daily record
+      console.log('Daily Record:', dailyRecord);
+      
+      // Update the TQQQ row in the CSV for the portfolio value (this is just a simulation)
+      updateTqqqPortfolioValue(today, currentPrice);
+    }, recordFrequency * 1000);
 
     Papa.parse(csvUrl, {
       download: true,
@@ -127,15 +146,6 @@
             return null; // If the portfolio value is empty or zero, discard this row
           }
 
-          // Collect daily changes for each share
-          if (!dailyData[row['Ticker']]) {
-            dailyData[row['Ticker']] = [];
-          }
-          dailyData[row['Ticker']].push({
-            date: date,
-            value: portfolioValue
-          });
-
           return {
             date: date,  // Store the raw date for display on the chart
             portfolioValue: portfolioValue  // Store the portfolio value
@@ -150,6 +160,12 @@
       },
       error: err => console.error('CSV load error:', err)
     });
+
+    function updateTqqqPortfolioValue(date, price) {
+      // Update the portfolio value for TQQQ in column O (this is for testing)
+      // In reality, this data would be stored and processed from your CSV or database.
+      console.log(`Updating TQQQ portfolio value for date ${date}: $${price.toFixed(2)}`);
+    }
 
     function renderCharts(memberView) {
       const f = memberView ? 14 : 1;
@@ -198,11 +214,6 @@
       const lineLabels = portfolioData.map(r => r.date);
       const lineData = portfolioData.map(r => r.portfolioValue);
 
-      // Find the min and max values to dynamically adjust the y-axis
-      const minValue = Math.min(...lineData);
-      const maxValue = Math.max(...lineData);
-      const margin = (maxValue - minValue) * 0.1;  // Add 10% margin above and below
-
       new Chart(document.getElementById('portfolioValueLine'), {
         type: 'line',
         data: {
@@ -220,8 +231,7 @@
           maintainAspectRatio: false,
           scales: {
             y: {
-              min: minValue - margin,  // Set the min value with margin
-              max: maxValue + margin,  // Set the max value with margin
+              beginAtZero: true,
               ticks: {
                 callback: function(value) {
                   return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
@@ -232,36 +242,31 @@
         }
       });
 
-      // PIE chart
-      const pieLabels = rawRows.map(r => r.Ticker);
-      const pieData = rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0) / f);
-      new Chart(document.getElementById('summaryPie'), {
-        type: 'doughnut',
-        data: { labels: pieLabels, datasets: [{ data: pieData }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { position: 'right' } }
-        }
-      });
+      // Create a chart to show daily TQQQ price changes (Line chart for daily data)
+      const tqqqCard = document.createElement('div');
+      tqqqCard.className = 'chart-card';
+      tqqqCard.innerHTML = `
+        <h2>TQQQ Daily Price Changes</h2>
+        <div class="chart-container">
+          <canvas id="tqqqDailyChart"></canvas>
+        </div>
+      `;
+      dashboard.appendChild(tqqqCard);
 
-      // BAR chart
-      new Chart(document.getElementById('summaryBar'), {
-        type: 'bar',
+      const dailyLabels = dailyRecord.map(r => r.date);
+      const dailyPrices = dailyRecord.map(r => r.price);
+
+      // Line chart for TQQQ daily prices
+      new Chart(document.getElementById('tqqqDailyChart'), {
+        type: 'line',
         data: {
-          labels: ['Spent', 'Profit', 'Value'],
+          labels: dailyLabels,
           datasets: [{
-            label: 'NZD',
-            data: [
-              totalSpent / f,
-              totalProfit / f,
-              totalValue / f
-            ],
-            backgroundColor: [
-              'rgba(54,162,235,0.6)',
-              'rgba(255,205,86,0.6)',
-              'rgba(75,192,192,0.6)'
-            ]
+            label: 'TQQQ Price (USD)',
+            data: dailyPrices,
+            fill: false,
+            borderColor: 'rgba(75, 192, 192, 1)',
+            tension: 0.1
           }]
         },
         options: {
@@ -269,91 +274,16 @@
           maintainAspectRatio: false,
           scales: {
             y: {
-              beginAtZero: true,
-              ticks: { callback: v => '$' + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) }
-            }
-          },
-          plugins: { legend: { display: false } }
-        }
-      });
-
-      // one card per holding
-      rawRows.forEach(r => {
-        const tcUsd = parseFloat(r['Total Cost'].replace(/[^\d.-]/g, '')) || 0;
-        const mvUsd = parseFloat(r['Market Value'].replace(/[^\d.-]/g, '')) || 0;
-        const mvNzd = parseFloat(r['NZD'].replace(/[^\d.-]/g, '')) || 0;
-        const avgUsd = parseFloat(r['Average cost'].replace(/[^\d.-]/g, '')) || 0;
-        const priceUsd = parseFloat(r.Price.replace(/[^\d.-]/g, '')) || 0;
-        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-        const profitNzd = mvNzd - costNzd;
-        const pctChange = parseFloat(r['% Change'].replace(/[^\d.-]/g, '')) || 0;
-
-        // create card
-        const card = document.createElement('div');
-        card.className = 'chart-card';
-        card.innerHTML = `
-          <h2>${r.Ticker}</h2>
-          <div class="chart-container">
-            <canvas id="chart-${r.Ticker}"></canvas>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="toggleLineChart-${r.Ticker}">
-            <span class="slider"></span>
-          </label>
-          <span>Show Daily Change</span>
-        `;
-        dashboard.appendChild(card);
-
-        // Toggle handler for daily change chart
-        const toggleSwitch = document.getElementById(`toggleLineChart-${r.Ticker}`);
-        toggleSwitch.addEventListener('change', (e) => {
-          const lineChartContainer = document.getElementById(`chart-${r.Ticker}`);
-          if (e.target.checked) {
-            // Display the daily change chart
-            const dailyLabels = dailyData[r.Ticker].map(d => d.date);
-            const dailyValues = dailyData[r.Ticker].map(d => d.value);
-            new Chart(lineChartContainer, {
-              type: 'line',
-              data: {
-                labels: dailyLabels,
-                datasets: [{
-                  label: `${r.Ticker} Daily Change (NZD)`,
-                  data: dailyValues,
-                  fill: false,
-                  borderColor: 'rgba(75,192,192,1)',
-                  tension: 0.1
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  y: {
-                    ticks: {
-                      callback: function(value) {
-                        return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
-                      }
-                    }
-                  }
+              ticks: {
+                callback: function(value) {
+                  return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
                 }
               }
-            });
-          } else {
-            // Hide the daily change chart
-            lineChartContainer.innerHTML = '';
+            }
           }
-        });
-
-        // Change background color for profit/loss
-        const chartContainer = card.querySelector('.chart-container');
-        if (profitNzd >= 0) {
-          card.style.backgroundColor = 'rgba(144, 238, 144, 0.3)'; // light green
-        } else {
-          card.style.backgroundColor = 'rgba(255, 99, 132, 0.3)'; // light red
         }
       });
     }
   </script>
 </body>
 </html>
-
