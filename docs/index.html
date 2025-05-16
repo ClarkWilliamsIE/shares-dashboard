@@ -93,24 +93,47 @@
         return card;
       }
 
-      // A) Allocation (donut) — legend on bottom, extra height
-      makeCard(`Allocation (NZD${memberView?' per member':''})`, 'allocationChart');
-      new ApexCharts(document.querySelector('#allocationChart'), {
+      // A) Allocation (donut) — disable Apex legend, then build our own
+      const allocCard = makeCard(
+        `Allocation (NZD${memberView ? ' per member' : ''})`,
+        'allocationChart'
+      );
+
+      const allocLabels = rawRows.map(r => r.Ticker);
+      const allocSeries = rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0) / f);
+
+      const allocOpts = {
         chart: { type: 'donut', height: 320, toolbar: { show: false } },
-        series: rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,''))||0)/f),
-        labels: rawRows.map(r => r.Ticker),
-        legend: {
-          position: 'bottom',
-          horizontalAlign: 'center',
-          labels: { colors: '#fff' },
-          itemMargin: { horizontal: 10, vertical: 5 }
-        },
+        series: allocSeries,
+        labels: allocLabels,
+        legend: { show: false },
         dataLabels: { enabled: false },
         theme: { mode: 'dark' },
         tooltip: { theme: 'dark' }
-      }).render();
+      };
 
-      // B) Summary (bar)
+      const allocChart = new ApexCharts(allocCard.querySelector('#allocationChart'), allocOpts);
+      allocChart.render().then(() => {
+        // after render, grab the colors Apex chose
+        const colors = allocChart.w.config.options.colors;
+        // build a simple 2-column legend
+        const legendWrap = document.createElement('div');
+        legendWrap.className = 'mt-4 grid grid-cols-2 gap-2 text-xs';
+        allocLabels.forEach((lbl, i) => {
+          const item = document.createElement('div');
+          item.className = 'flex items-center';
+          item.innerHTML = `
+            <span
+              class="w-3 h-3 inline-block mr-1 rounded-full"
+              style="background-color:${colors[i]};"
+            ></span>${lbl}
+          `;
+          legendWrap.appendChild(item);
+        });
+        allocCard.appendChild(legendWrap);
+      });
+
+      // B) Portfolio Summary (bar)
       makeCard(`Portfolio Summary (NZD${memberView?' per member':''})`, 'summaryChart');
       new ApexCharts(document.querySelector('#summaryChart'), {
         chart: { type: 'bar', height: 240, toolbar: { show: false } },
@@ -121,7 +144,7 @@
         },
         yaxis: {
           labels: {
-            formatter: v => '$' + v.toLocaleString(),
+            formatter: v => '$'+v.toLocaleString(),
             style: { colors: '#fff' }
           }
         },
@@ -144,7 +167,7 @@
           min: minV - margin,
           max: maxV + margin,
           labels: {
-            formatter: v => '$' + v.toLocaleString(),
+            formatter: v => '$'+v.toLocaleString(),
             style: { colors: '#fff' }
           }
         },
@@ -169,15 +192,15 @@
         new ApexCharts(card.querySelector(`#chart-${r.Ticker}`), {
           chart: { height: 260, toolbar: { show: false } },
           series: [
-            { name: 'NZD',        type: 'column', data: [costNZ/f, mv/f, profNZ/f, null] },
-            { name: '% Change',  type: 'line',   data: [null, null, null, pct] }
+            { name: 'NZD', type: 'column', data: [costNZ/f, mv/f, profNZ/f, null] },
+            { name: '% Change', type: 'line', data: [null,null,null,pct] }
           ],
           labels: ['Cost','Value','Profit','% Change'],
           yaxis: [
             {
               title: { text: 'NZD' },
               labels: {
-                formatter: v => '$' + v.toLocaleString(),
+                formatter: v => '$'+v.toLocaleString(),
                 style: { colors: '#fff' }
               }
             },
@@ -185,14 +208,14 @@
               opposite: true,
               title: { text: '% Change' },
               labels: {
-                formatter: v => v + '%',
+                formatter: v => v+'%',
                 style: { colors: '#fff' }
               }
             }
           ],
           plotOptions: { bar: { borderRadius: 4 } },
-          stroke: { width: [0, 3], curve: 'smooth' },
-          legend: { position: 'bottom', labels: { colors: '#fff' } },
+          stroke: { width: [0,3], curve: 'smooth' },
+          legend: { show: false },
           theme: { mode: 'dark' },
           tooltip: { theme: 'dark' }
         }).render();
