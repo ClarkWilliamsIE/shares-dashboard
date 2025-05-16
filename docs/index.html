@@ -94,6 +94,11 @@
       width: 100% !important;
       height: 100% !important;
     }
+    /* Slider styling */
+    .zoom-slider {
+      width: 100%;
+      margin: 10px 0;
+    }
   </style>
 </head>
 
@@ -106,7 +111,14 @@
     </label>
     <span>Member view</span>
   </div>
+
   <div class="dashboard" id="dashboard"></div>
+
+  <!-- Zoom Slider -->
+  <div style="text-align:center;">
+    <label for="zoomControl" style="color: #fff;">Zoom Level</label>
+    <input type="range" id="zoomControl" class="zoom-slider" min="1" max="10" value="1" step="0.1">
+  </div>
 
   <script>
     const csvUrl =
@@ -114,6 +126,7 @@
 
     let rawRows = [];
     let portfolioData = [];  // To hold the portfolio value data for the line chart
+    let chartInstance = null; // Store the chart instance
 
     Papa.parse(csvUrl, {
       download: true,
@@ -199,7 +212,7 @@
       const maxValue = Math.max(...lineData);
       const margin = (maxValue - minValue) * 0.1;  // Add 10% margin above and below
 
-      new Chart(document.getElementById('portfolioValueLine'), {
+      chartInstance = new Chart(document.getElementById('portfolioValueLine'), {
         type: 'line',
         data: {
           labels: lineLabels,
@@ -239,10 +252,7 @@
               labels: {
                 color: '#fff',  // White color for legend text
               }
-            }
-          },
-          // Enable zoom and pan functionality
-          plugins: {
+            },
             zoom: {
               pan: {
                 enabled: true,
@@ -430,6 +440,16 @@
         });
       });
     }
+
+    // Slider for zoom control
+    document.getElementById('zoomControl').addEventListener('input', (e) => {
+      const zoomValue = e.target.value;
+      if (chartInstance) {
+        chartInstance.options.scales.y.min = chartInstance.data.datasets[0].data[0] - zoomValue * 100; // zoom out
+        chartInstance.options.scales.y.max = chartInstance.data.datasets[0].data[chartInstance.data.datasets[0].data.length - 1] + zoomValue * 100; // zoom in
+        chartInstance.update();
+      }
+    });
   </script>
 </body>
 </html>
