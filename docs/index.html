@@ -267,7 +267,7 @@
         }
       });
 
-      // BAR chart
+      // BAR chart with new color palette
       new Chart(document.getElementById('summaryBar'), {
         type: 'bar',
         data: {
@@ -280,9 +280,9 @@
               totalValue / f
             ],
             backgroundColor: [
-              'rgba(54,162,235,0.6)',
-              'rgba(255,205,86,0.6)',
-              'rgba(75,192,192,0.6)'
+              'rgba(30, 136, 229, 0.8)',  // Blue for spent
+              'rgba(76, 175, 80, 0.8)',   // Green for profit
+              'rgba(255, 87, 34, 0.8)'    // Orange for value
             ]
           }]
         },
@@ -357,9 +357,9 @@
                   null
                 ],
                 backgroundColor: [
-                  'rgba(54,162,235,0.6)',
-                  'rgba(75,192,192,0.6)',
-                  'rgba(255,205,86,0.6)'
+                  'rgba(30, 136, 229, 0.8)',  // Blue for cost
+                  'rgba(76, 175, 80, 0.8)',   // Green for value
+                  'rgba(255, 87, 34, 0.8)'    // Orange for profit
                 ]
               },
               {
@@ -416,3 +416,4 @@
   </script>
 </body>
 </html>
+
