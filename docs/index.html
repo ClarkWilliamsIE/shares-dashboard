@@ -108,6 +108,7 @@
 
     let rawRows = [];
     let portfolioData = [];  // To hold the portfolio value data for the line chart
+    let dailyData = {};  // To hold daily changes for each share (for the line chart)
 
     Papa.parse(csvUrl, {
       download: true,
@@ -125,6 +126,15 @@
           if (!portfolioValue) {
             return null; // If the portfolio value is empty or zero, discard this row
           }
+
+          // Collect daily changes for each share
+          if (!dailyData[row['Ticker']]) {
+            dailyData[row['Ticker']] = [];
+          }
+          dailyData[row['Ticker']].push({
+            date: date,
+            value: portfolioValue
+          });
 
           return {
             date: date,  // Store the raw date for display on the chart
@@ -286,8 +296,53 @@
           <div class="chart-container">
             <canvas id="chart-${r.Ticker}"></canvas>
           </div>
+          <label class="switch">
+            <input type="checkbox" id="toggleLineChart-${r.Ticker}">
+            <span class="slider"></span>
+          </label>
+          <span>Show Daily Change</span>
         `;
         dashboard.appendChild(card);
+
+        // Toggle handler for daily change chart
+        const toggleSwitch = document.getElementById(`toggleLineChart-${r.Ticker}`);
+        toggleSwitch.addEventListener('change', (e) => {
+          const lineChartContainer = document.getElementById(`chart-${r.Ticker}`);
+          if (e.target.checked) {
+            // Display the daily change chart
+            const dailyLabels = dailyData[r.Ticker].map(d => d.date);
+            const dailyValues = dailyData[r.Ticker].map(d => d.value);
+            new Chart(lineChartContainer, {
+              type: 'line',
+              data: {
+                labels: dailyLabels,
+                datasets: [{
+                  label: `${r.Ticker} Daily Change (NZD)`,
+                  data: dailyValues,
+                  fill: false,
+                  borderColor: 'rgba(75,192,192,1)',
+                  tension: 0.1
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  y: {
+                    ticks: {
+                      callback: function(value) {
+                        return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
+                      }
+                    }
+                  }
+                }
+              }
+            });
+          } else {
+            // Hide the daily change chart
+            lineChartContainer.innerHTML = '';
+          }
+        });
 
         // Change background color for profit/loss
         const chartContainer = card.querySelector('.chart-container');
@@ -296,75 +351,6 @@
         } else {
           card.style.backgroundColor = 'rgba(255, 99, 132, 0.3)'; // light red
         }
-
-        // mixed NZD bars + % line
-        new Chart(document.getElementById(`chart-${r.Ticker}`), {
-          data: {
-            labels: ['Cost', 'Value', 'Profit', '% Change'],
-            datasets: [
-              {
-                type: 'bar',
-                label: 'NZD',
-                data: [
-                  costNzd / f,
-                  mvNzd / f,
-                  profitNzd / f,
-                  null
-                ],
-                backgroundColor: [
-                  'rgba(54,162,235,0.6)',
-                  'rgba(75,192,192,0.6)',
-                  'rgba(255,205,86,0.6)'
-                ]
-              },
-              {
-                type: 'line',
-                label: '% Change',
-                data: [
-                  null, null, null,
-                  pctChange
-                ],
-                yAxisID: 'PCT',
-                borderColor: 'rgba(255,99,132,0.8)',
-                backgroundColor: 'rgba(255,99,132,0.4)',
-                tension: 0.3,
-                pointRadius: 4,
-                fill: false
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: 'NZD' },
-                ticks: { callback: v => '$' + v.toLocaleString() }
-              },
-              PCT: {
-                type: 'linear',
-                position: 'right',
-                title: { display: true, text: '% Change' },
-                grid: { drawOnChartArea: false },
-                ticks: { callback: v => v + '%' }
-              }
-            },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: ctx => {
-                    if (ctx.dataset.type === 'line') {
-                      return `% Change: ${ctx.parsed.y}%`;
-                    }
-                    return `NZD $${ctx.parsed.y.toLocaleString()}`;
-                  }
-                }
-              },
-              legend: { position: 'bottom' }
-            }
-          }
-        });
       });
     }
   </script>
