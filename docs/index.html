@@ -15,11 +15,13 @@
       margin: 0;
       padding: 1rem;
       font-family: sans-serif;
-      background: #f5f7fa;
+      background: #121212; /* Dark background for dark mode */
+      color: #fff; /* Light text color */
     }
     h1 {
       text-align: center;
       margin-bottom: 0.5rem;
+      color: #fff; /* White text */
     }
     /* switch styling */
     .switch {
@@ -67,9 +69,9 @@
       margin-top: 1rem;
     }
     .chart-card {
-      background: #fff;
+      background: #1e1e1e; /* Dark background for each card */
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
       padding: 1rem;
       display: flex;
       flex-direction: column;
@@ -78,6 +80,7 @@
       margin: 0 0 0.5rem;
       font-size: 1.1rem;
       text-align: center;
+      color: #fff; /* White text for titles */
     }
     .chart-container {
       position: relative;
@@ -216,6 +219,22 @@
                 callback: function(value) {
                   return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
                 }
+              },
+              grid: {
+                color: '#444',  // Dark grid lines
+                borderColor: '#444'  // Dark grid border color
+              }
+            },
+            x: {
+              grid: {
+                color: '#444',  // Dark x-axis grid lines
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              labels: {
+                color: '#fff',  // White color for legend text
               }
             }
           }
@@ -231,7 +250,14 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { position: 'right' } }
+          plugins: { 
+            legend: {
+              position: 'right',
+              labels: {
+                color: '#fff',  // White color for legend text
+              }
+            }
+          }
         }
       });
 
@@ -260,10 +286,23 @@
           scales: {
             y: {
               beginAtZero: true,
-              ticks: { callback: v => '$' + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) }
+              ticks: { callback: v => '$' + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) },
+              grid: {
+                color: '#444',  // Dark grid lines
+                borderColor: '#444'  // Dark grid border color
+              }
+            },
+            x: {
+              grid: {
+                color: '#444',  // Dark x-axis grid lines
+              }
             }
           },
-          plugins: { legend: { display: false } }
+          plugins: { 
+            legend: { 
+              display: false 
+            } 
+          }
         }
       });
 
@@ -340,7 +379,8 @@
               y: {
                 beginAtZero: true,
                 title: { display: true, text: 'NZD' },
-                ticks: { callback: v => '$' + v.toLocaleString() }
+                ticks: { callback: v => '$' + v.toLocaleString() },
+                grid: { color: '#444' }
               },
               PCT: {
                 type: 'linear',
@@ -370,4 +410,3 @@
   </script>
 </body>
 </html>
-
