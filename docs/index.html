@@ -75,6 +75,7 @@
       padding: 1rem;
       display: flex;
       flex-direction: column;
+      border: 3px solid transparent; /* Default border (transparent initially) */
     }
     .chart-card h2 {
       margin: 0 0 0.5rem;
@@ -328,12 +329,12 @@
         `;
         dashboard.appendChild(card);
 
-        // Change background color for profit/loss
+        // Set border color based on profit/loss
         const chartContainer = card.querySelector('.chart-container');
         if (profitNzd >= 0) {
-          card.style.backgroundColor = 'rgba(144, 238, 144, 0.3)'; // light green
+          card.style.border = '3px solid #28a745';  // Green border for profit
         } else {
-          card.style.backgroundColor = 'rgba(255, 99, 132, 0.3)'; // light red
+          card.style.border = '3px solid #dc3545';  // Red border for loss
         }
 
         // mixed NZD bars + % line
