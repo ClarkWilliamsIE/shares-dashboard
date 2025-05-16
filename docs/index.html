@@ -1,284 +1,206 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Winnerland!</title>
 
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- PapaParse -->
+  <!-- 1) Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- 2) Flowbite CSS -->
+  <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.5.2/flowbite.min.css"
+    rel="stylesheet"
+  />
+
+  <!-- 3) ApexCharts (for Flowbite Charts) -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+  <!-- 4) Flowbite JS (includes Charts plugin) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.5.2/flowbite.bundle.min.js"></script>
+
+  <!-- 5) PapaParse (CSV parsing) -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-  <!-- Flowbite for dropdown and other components -->
-  <script src="https://cdn.jsdelivr.net/npm/flowbite@1.4.0/dist/flowbite.min.js"></script>
-
-  <style>
-    body {
-      margin: 0;
-      padding: 1rem;
-      font-family: sans-serif;
-      background: #121212; /* Dark background for dark mode */
-      color: #fff; /* Light text color */
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 0.5rem;
-      color: #fff; /* White text */
-    }
-    /* switch styling */
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 50px;
-      height: 26px;
-      margin-right: 0.5rem;
-      vertical-align: middle;
-    }
-    .switch input {
-      opacity: 0;
-      width: 0; height: 0;
-    }
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #ccc;
-      transition: .4s;
-      border-radius: 26px;
-    }
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 18px;
-      width: 18px;
-      left: 4px;
-      bottom: 4px;
-      background-color: white;
-      transition: .4s;
-      border-radius: 50%;
-    }
-    input:checked + .slider {
-      background-color: #2196F3;
-    }
-    input:checked + .slider:before {
-      transform: translateX(24px);
-    }
-    /* dashboard grid */
-    .dashboard {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1rem;
-      margin-top: 1rem;
-    }
-    .chart-card {
-      background: #1e1e1e; /* Dark background for each card */
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
-    }
-    .chart-card h2 {
-      margin: 0 0 0.5rem;
-      font-size: 1.1rem;
-      text-align: center;
-      color: #fff; /* White text for titles */
-    }
-    .chart-container {
-      position: relative;
-      flex: 1;
-      height: 200px;
-    }
-    .chart-container canvas {
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* Flowbite card styling */
-    .flowbite-card {
-      max-width: 600px;
-      width: 100%;
-      background: #1f2937; /* Dark background */
-      border-radius: 0.75rem;
-      padding: 20px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-    }
-
-    .flowbite-card h5 {
-      font-size: 2.5rem;
-      font-weight: bold;
-      color: #fff;
-    }
-
-    .flowbite-card .text-gray-500 {
-      color: #c1c1c1;
-    }
-
-    .flowbite-card .text-green-500 {
-      color: #10b981; /* Green text for positive changes */
-    }
-
-    .flowbite-card .dropdown-button {
-      padding: 8px 15px;
-      border-radius: 0.375rem;
-      background: #374151;
-      color: #fff;
-      cursor: pointer;
-      border: none;
-    }
-
-    .flowbite-card .dropdown-menu {
-      position: absolute;
-      top: 80%;
-      left: 0;
-      width: 200px;
-      background: #1f2937;
-      border-radius: 0.75rem;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-      padding: 1rem;
-    }
-  </style>
 </head>
 
-<body>
-  <h1>Winnerland!</h1>
-  <div style="text-align:center;">
-    <label class="switch">
-      <input type="checkbox" id="memberToggle">
-      <span class="slider"></span>
+<body class="bg-gray-900 text-white p-4 font-sans">
+  <h1 class="text-3xl text-center mb-4">Winnerland!</h1>
+
+  <div class="text-center mb-4">
+    <label class="inline-flex items-center cursor-pointer">
+      <input id="memberToggle" type="checkbox" class="sr-only peer" />
+      <div
+        class="w-12 h-6 bg-gray-700 rounded-full peer-checked:bg-blue-600 transition-colors"
+      ></div>
+      <span class="ml-2">Member view</span>
     </label>
-    <span>Member view</span>
   </div>
-  <div class="dashboard" id="dashboard"></div>
+
+  <div id="dashboard" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
 
   <script>
     const csvUrl =
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
-    let rawRows = [];
-    let portfolioData = [];  // To hold the portfolio value data for the line chart
+    let rawRows = [], portfolioData = [];
 
+    // 1) Parse CSV
     Papa.parse(csvUrl, {
       download: true,
       header: true,
       complete: ({ data }) => {
-        // Filter out rows where quantity is 0 or less (no longer owned shares)
-        rawRows = data.filter(r => parseFloat(r['QTY']) > 0 && r.Ticker);
+        rawRows = data.filter(r => parseFloat(r.QTY) > 0 && r.Ticker);
 
-        // Extract portfolio values for the line chart (from column M for date and column N for value)
-        portfolioData = data.map(row => {
-          const date = row['M']; // column M for date
-          const portfolioValue = parseFloat(row['N']) || 0;  // column N for portfolio value
-          
-          // Exclude empty portfolio values (or zero)
-          if (!portfolioValue) {
-            return null; // If the portfolio value is empty or zero, discard this row
-          }
+        portfolioData = data
+          .map(row => {
+            const v = parseFloat(row.N) || 0;
+            return v ? { date: row.M, value: v } : null;
+          })
+          .filter(r => r);
 
-          return {
-            date: date,  // Store the raw date for display on the chart
-            portfolioValue: portfolioValue  // Store the portfolio value
-          };
-        }).filter(row => row !== null);  // Filter out null values (empty or zero portfolio values)
-
-        // Render charts
+        // initial render
         renderCharts(false);
-        // Toggle handler
-        document.getElementById('memberToggle')
+
+        // re-render on toggle
+        document
+          .getElementById('memberToggle')
           .addEventListener('change', e => renderCharts(e.target.checked));
       },
       error: err => console.error('CSV load error:', err)
     });
 
+    // 2) Render all charts
     function renderCharts(memberView) {
       const f = memberView ? 14 : 1;
-      const dashboard = document.getElementById('dashboard');
-      dashboard.innerHTML = '';
+      const dash = document.getElementById('dashboard');
+      dash.innerHTML = '';
 
       // compute totals
-      let totalSpent = 0, totalValue = 0;
+      let spent = 0, value = 0;
       rawRows.forEach(r => {
-        const tcUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
-        const mvUsd   = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 0;
-        const mvNzd   = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
-        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-        totalSpent += costNzd;
-        totalValue += mvNzd;
+        const tc  = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
+        const mv  = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
+        const mvu = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 1;
+        const costNZ = mvu ? tc * (mv / mvu) : 0;
+        spent += costNZ;
+        value += mv;
       });
-      const totalProfit = totalValue - totalSpent;
+      const profit = value - spent;
 
-      // Flowbite card for portfolio value over time
-      const flowbiteCard = document.createElement('div');
-      flowbiteCard.className = 'flowbite-card';
-      flowbiteCard.innerHTML = `
-        <div class="flex justify-between">
-          <div>
-            <h5 class="leading-none text-3xl font-bold text-white pb-2">Portfolio Value</h5>
-            <p class="text-base font-normal text-gray-500 dark:text-gray-400">Over Time</p>
-          </div>
-          <div class="flex items-center px-2.5 py-0.5 text-base font-semibold text-green-500 dark:text-green-500 text-center">
-            12%
-            <svg class="w-3 h-3 ms-1" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 14">
-              <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13V1m0 0L1 5m4-4 4 4"/>
-            </svg>
-          </div>
-        </div>
-        <div id="area-chart"></div>
-        <div class="grid grid-cols-1 items-center border-gray-200 border-t dark:border-gray-700 justify-between">
-          <div class="flex justify-between items-center pt-5">
-            <button
-              id="dropdownDefaultButton"
-              data-dropdown-toggle="lastDaysdropdown"
-              data-dropdown-placement="bottom"
-              class="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-900 text-center inline-flex items-center dark:hover:text-white"
-              type="button">
-              Last 7 days
-              <svg class="w-2.5 m-2.5 ms-1.5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
-                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      `;
-      dashboard.appendChild(flowbiteCard);
+      // helper: create a card + container
+      function makeCard(title, chartId) {
+        const card = document.createElement('div');
+        card.className = 'bg-gray-800 rounded-lg shadow-lg p-4 flex flex-col';
+        card.innerHTML = `
+          <h2 class="text-lg mb-2 text-center">${title}</h2>
+          <div id="${chartId}"></div>
+        `;
+        dash.appendChild(card);
+        return card;
+      }
 
-      const lineLabels = portfolioData.map(r => r.date);
-      const lineData = portfolioData.map(r => r.portfolioValue);
+      // A) Allocation (donut)
+      makeCard(`Allocation (NZD${memberView?' per member':''})`, 'allocationChart');
+      new ApexCharts(document.querySelector('#allocationChart'), {
+        chart: { type: 'donut', height: 240, toolbar: { show: false } },
+        series: rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,''))||0)/f),
+        labels: rawRows.map(r => r.Ticker),
+        legend: { position: 'right', labels: { colors: '#fff' } },
+        dataLabels: { enabled: false },
+        theme: { mode: 'dark' },
+        tooltip: { theme: 'dark' }
+      }).render();
 
-      new Chart(document.getElementById('area-chart'), {
-        type: 'line',
-        data: {
-          labels: lineLabels,
-          datasets: [{
-            label: 'Portfolio Value (NZD)',
-            data: lineData,
-            fill: true, // Area chart effect
-            borderColor: 'rgba(75,192,192,1)',
-            backgroundColor: 'rgba(75,192,192,0.2)',
-            tension: 0.1
-          }]
+      // B) Summary (bar)
+      makeCard(`Portfolio Summary (NZD${memberView?' per member':''})`, 'summaryChart');
+      new ApexCharts(document.querySelector('#summaryChart'), {
+        chart: { type: 'bar', height: 240, toolbar: { show: false } },
+        series: [{ name: 'NZD', data: [spent/f, profit/f, value/f] }],
+        xaxis: {
+          categories: ['Spent','Profit','Value'],
+          labels: { style: { colors: '#fff' } }
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              beginAtZero: false,
-              ticks: {
-                callback: function(value) {
-                  return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
-                }
+        yaxis: {
+          labels: {
+            formatter: v => '$' + v.toLocaleString(),
+            style: { colors: '#fff' }
+          }
+        },
+        plotOptions: { bar: { borderRadius: 4 } },
+        theme: { mode: 'dark' },
+        tooltip: { theme: 'dark' }
+      }).render();
+
+      // C) Value Over Time (line)
+      makeCard('Portfolio Value Over Time', 'valueLineChart');
+      const dates = portfolioData.map(r => r.date);
+      const vals  = portfolioData.map(r => r.value);
+      const minV  = Math.min(...vals), maxV = Math.max(...vals);
+      const margin = (maxV - minV) * 0.1;
+      new ApexCharts(document.querySelector('#valueLineChart'), {
+        chart: { type: 'line', height: 240, toolbar: { show: false } },
+        series: [{ name: 'Value', data: vals }],
+        xaxis: { categories: dates, labels: { style: { colors: '#fff' } } },
+        yaxis: {
+          min: minV - margin,
+          max: maxV + margin,
+          labels: {
+            formatter: v => '$' + v.toLocaleString(),
+            style: { colors: '#fff' }
+          }
+        },
+        stroke: { curve: 'smooth', width: 2 },
+        grid: { borderColor: '#374151' },
+        theme: { mode: 'dark' },
+        tooltip: { theme: 'dark' }
+      }).render();
+
+      // D) One card per holding (mixed bar + line)
+      rawRows.forEach(r => {
+        const tc  = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
+        const mv  = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
+        const mvu = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 1;
+        const costNZ = mvu ? tc * (mv / mvu) : 0;
+        const profNZ = mv - costNZ;
+        const pct    = parseFloat(r['% Change'].replace(/[^\d.-]/g,'')) || 0;
+
+        const card = makeCard(r.Ticker, `chart-${r.Ticker}`);
+        card.classList.add(profNZ >= 0 ? 'border-4 border-green-500' : 'border-4 border-red-500');
+
+        new ApexCharts(card.querySelector(`#chart-${r.Ticker}`), {
+          chart: { height: 260, toolbar: { show: false } },
+          series: [
+            { name: 'NZD',   type: 'column', data: [costNZ/f, mv/f, profNZ/f, null] },
+            { name: '% Change', type: 'line',   data: [null, null, null, pct] }
+          ],
+          labels: ['Cost','Value','Profit','% Change'],
+          yaxis: [
+            {
+              title: { text: 'NZD' },
+              labels: {
+                formatter: v => '$' + v.toLocaleString(),
+                style: { colors: '#fff' }
               }
             },
-            x: {
-              grid: {
-                color: '#444',  // Dark x-axis grid lines
+            {
+              opposite: true,
+              title: { text: '% Change' },
+              labels: {
+                formatter: v => v + '%',
+                style: { colors: '#fff' }
               }
             }
-          }
-        }
+          ],
+          plotOptions: { bar: { borderRadius: 4 } },
+          stroke: { width: [0, 3], curve: 'smooth' },
+          legend: { position: 'bottom', labels: { colors: '#fff' } },
+          theme: { mode: 'dark' },
+          tooltip: { theme: 'dark' }
+        }).render();
       });
     }
   </script>
 </body>
 </html>
+
