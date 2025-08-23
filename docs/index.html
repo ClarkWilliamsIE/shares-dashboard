@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Winnerland!</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Winnerland</title>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -11,181 +11,443 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 
   <style>
-    body {
-      margin: 0;
-      padding: 1rem;
-      font-family: sans-serif;
-      background: #f5f7fa;
+    :root{
+      --bg:#0e0f13;
+      --panel:#171923;
+      --text:#e9edf1;
+      --muted:#9aa4b2;
+      --ring:#2a2f3a;
+      --good:#22c55e;
+      --bad:#ef4444;
+      --accent:#60a5fa;
+      --accent2:#34d399;
+      --shadow:0 6px 22px rgba(0,0,0,.35);
     }
-    h1 {
-      text-align: center;
-      margin-bottom: 1rem;
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,Apple Color Emoji,Segoe UI Emoji;
+      background: radial-gradient(1200px 400px at 50% -10%, #1c2030 0%, var(--bg) 60%);
+      color:var(--text);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      padding:0;
     }
-    .dashboard {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1rem;
+
+    .wrap{padding:12px; max-width:1200px; margin:0 auto}
+
+    /* Header summary */
+    .top{
+      position:sticky; top:0; z-index:5;
+      background:rgba(14,15,19,.75);
+      backdrop-filter:blur(10px);
+      border-bottom:1px solid rgba(255,255,255,.06);
     }
-    .chart-card {
-      background: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      padding: 1rem;
-      display: flex;
-      flex-direction: column;
+    .top-inner{
+      display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center;
+      padding:10px 12px;
     }
-    .chart-card h2 {
-      margin: 0 0 0.5rem;
-      font-size: 1.1rem;
-      text-align: center;
+    h1{font-size:1.35rem; margin:0; letter-spacing:.3px}
+    .summary{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:flex-end;
+      font-variant-numeric:tabular-nums;
     }
-    .chart-container {
-      position: relative;
-      flex: 1;
-      height: 200px;
+    .chip{
+      padding:6px 10px; border:1px solid rgba(255,255,255,.08); border-radius:10px;
+      background:rgba(255,255,255,.04);
     }
-    .chart-container canvas {
-      width: 100% !important;
-      height: 100% !important;
+    .muted{color:var(--muted)}
+    .good{color:var(--good)}
+    .bad{color:var(--bad)}
+
+    /* Controls */
+    .controls{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center;
+      padding:10px 0 0;
+    }
+    .btn{
+      appearance:none; border:1px solid rgba(255,255,255,.1);
+      background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      color:var(--text); padding:.55rem .8rem; border-radius:.7rem; cursor:pointer;
+      box-shadow:var(--shadow);
+    }
+    .btn.primary{background:linear-gradient(90deg, var(--accent), #7c3aed); border:none}
+    .toggle{
+      display:inline-flex; gap:8px; align-items:center; border:1px solid rgba(255,255,255,.1);
+      border-radius:.7rem; padding:.35rem .55rem; background:rgba(255,255,255,.03);
+    }
+
+    /* Grid */
+    .dash{
+      display:grid; gap:12px; margin:12px 0 20px;
+      grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+    }
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px; box-shadow:var(--shadow);
+      padding:12px; display:flex; flex-direction:column; min-height:240px;
+    }
+    .card h2{font-size:1rem; margin:0 0 8px; text-align:center}
+    .card .sub{font-size:.85rem; text-align:center; color:var(--muted); margin-bottom:6px}
+
+    .chart-box{position:relative; flex:1; min-height:200px}
+    .chart-box canvas{position:absolute; inset:0; width:100% !important; height:100% !important}
+
+    /* Holding card border feedback */
+    .profit{border:2px solid var(--good)}
+    .loss{border:2px solid var(--bad)}
+
+    /* Footer info */
+    .foot{margin-top:8px; font-size:.85rem; color:var(--muted); text-align:center}
+
+    /* Loading and errors */
+    .center{display:flex; align-items:center; justify-content:center; padding:24px}
+    .spinner{
+      width:20px; height:20px; border-radius:999px;
+      border:3px solid rgba(255,255,255,.15); border-top-color:var(--accent);
+      animation:spin 1s linear infinite; margin-right:8px;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    @media (min-width:900px){
+      .card.tall{grid-column:span 2; min-height:260px}
     }
   </style>
 </head>
-
 <body>
-  <h1>Winnerland!</h1>
-  <div class="dashboard" id="dashboard"></div>
+  <div class="top">
+    <div class="top-inner">
+      <h1>Winnerland</h1>
+      <div class="summary" id="summaryRow">
+        <span class="chip">Spent: <strong id="sumSpent">$0.00</strong></span>
+        <span class="chip">Value: <strong id="sumValue">$0.00</strong></span>
+        <span class="chip">Profit: <strong id="sumProfit" class="good">$0.00</strong></span>
+        <span class="chip muted" id="asof">As at …</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="controls">
+      <label class="toggle">
+        <input type="checkbox" id="memberToggle" />
+        <span>Member view</span>
+      </label>
+      <button class="btn" id="btnRefresh">Refresh</button>
+      <button class="btn" id="btnAuto">Auto refresh off</button>
+    </div>
+
+    <div id="status" class="center"><div class="spinner"></div> <span class="muted">Loading data</span></div>
+
+    <div class="dash" id="dash" style="display:none;"></div>
+
+    <div class="foot" id="footNote">CSV source is your Google Sheet, parsed in the browser.</div>
+  </div>
 
   <script>
-    const csvUrl =
+    // ---- Config, same CSV structure you already use ----
+    const CSV_URL =
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
-    Papa.parse(csvUrl, {
-      download: true,
-      header: true,
-      complete: ({ data }) => {
-        const dashboard = document.getElementById('dashboard');
-        const rows = data.filter(r => r.Ticker);
+    // Columns used:
+    // Ticker, QTY, Total Cost, Market Value, NZD, Average cost, Price, % Change
+    // Portfolio history: column M is date, column N is portfolio value
 
-        // compute totals
-        let totalSpent = 0, totalValue = 0;
-        rows.forEach(r => {
-          const tcUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
-          const mvUsd   = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 0;
-          const mvNzd   = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
-          const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-          totalSpent += costNzd;
-          totalValue += mvNzd;
-        });
-        const totalProfit = totalValue - totalSpent;
+    // ---- State ----
+    let rawRows = [];
+    let portfolioSeries = [];
+    let charts = new Map(); // id -> Chart instance
+    let autoTimer = null;
 
-        // Pie chart card
-        const pieCard = document.createElement('div');
-        pieCard.className = 'chart-card';
-        pieCard.innerHTML = `
-          <h2>Allocation (NZD)</h2>
-          <div class="chart-container">
-            <canvas id="summaryPie"></canvas>
-          </div>
-        `;
-        dashboard.appendChild(pieCard);
+    // ---- Helpers ----
+    const $ = s => document.querySelector(s);
+    const dash = $('#dash');
+    const statusBox = $('#status');
+    const memberToggle = $('#memberToggle');
 
-        // Bar chart card
-        const barCard = document.createElement('div');
-        barCard.className = 'chart-card';
-        barCard.innerHTML = `
-          <h2>Portfolio Summary (NZD)</h2>
-          <div class="chart-container">
-            <canvas id="summaryBar"></canvas>
-          </div>
-        `;
-        dashboard.appendChild(barCard);
+    function money(n){
+      return '$' + (n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function parseNum(x){
+      if (x == null) return 0;
+      if (typeof x === 'number') return x;
+      return parseFloat(String(x).replace(/[^\d.-]/g, '')) || 0;
+    }
+    function destroyChart(id){
+      const c = charts.get(id);
+      if (c){ c.destroy(); charts.delete(id); }
+    }
+    function setAsOf(){
+      $('#asof').textContent = 'As at ' + new Date().toLocaleString();
+    }
 
-        // render pie
-        const pieLabels = rows.map(r => r.Ticker);
-        const pieData   = rows.map(r => parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0);
-        new Chart(document.getElementById('summaryPie'), {
-          type: 'doughnut',
-          data: { labels: pieLabels, datasets:[{ data: pieData }] },
-          options: {
-            responsive:true,
-            maintainAspectRatio:false,
-            plugins:{ legend:{ position:'right' } }
-          }
-        });
+    function saveMemberPref(on){
+      try{ localStorage.setItem('wl_member', on ? '1' : '0'); }catch(e){}
+    }
+    function loadMemberPref(){
+      try{ return localStorage.getItem('wl_member') === '1'; }catch(e){ return false; }
+    }
 
-        // render bar
-        new Chart(document.getElementById('summaryBar'), {
-          type: 'bar',
-          data: {
-            labels: ['Spent','Profit','Value'],
-            datasets:[{
-              label:'NZD',
-              data:[totalSpent, totalProfit, totalValue],
-              backgroundColor:[
-                'rgba(54,162,235,0.6)',
-                'rgba(255,205,86,0.6)',
-                'rgba(75,192,192,0.6)'
-              ]
-            }]
-          },
-          options:{
-            responsive:true,
-            maintainAspectRatio:false,
-            scales:{
-              y:{
-                beginAtZero:true,
-                ticks:{ callback: v=> '$'+v.toLocaleString(undefined,{minimumFractionDigits:2}) }
-              }
-            },
-            plugins:{ legend:{ display:false } }
-          }
-        });
+    // ---- Data load ----
+    function loadCsv(){
+      statusBox.style.display = 'flex';
+      dash.style.display = 'none';
+      portfolioSeries = [];
+      rawRows = [];
+      return new Promise((resolve, reject) => {
+        Papa.parse(CSV_URL, {
+          download: true,
+          header: true,
+          dynamicTyping: false,
+          skipEmptyLines: 'greedy',
+          complete: ({ data }) => {
+            try{
+              // Filter to holdings with qty > 0
+              rawRows = data.filter(r => parseNum(r['QTY']) > 0 && r['Ticker']);
 
-        // one card per holding
-        rows.forEach(r => {
-          const avgUsd   = parseFloat(r['Average cost'].replace(/[^\d.-]/g,'')) || 0;
-          const priceUsd = parseFloat(r.Price.replace(/[^\d.-]/g,''))      || 0;
-          const tcUsd    = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
-          const mvUsd    = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 0;
-          const mvNzd    = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
-          const costNzd  = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
+              // Build portfolio time series from columns M and N
+              portfolioSeries = data.map(row => {
+                const dateStr = row['M'];
+                const val = parseNum(row['N']);
+                if (!dateStr || !val) return null;
+                const d = new Date(dateStr);
+                // Keep raw label for x axis and parsed value
+                return isNaN(d) ? null : { label: dateStr, value: val, t: d.getTime() };
+              }).filter(Boolean).sort((a,b) => a.t - b.t);
 
-          const card = document.createElement('div');
-          card.className = 'chart-card';
-          card.innerHTML = `
-            <h2>${r.Ticker}</h2>
-            <div class="chart-container">
-              <canvas id="chart-${r.Ticker}"></canvas>
-            </div>
-          `;
-          dashboard.appendChild(card);
-
-          new Chart(document.getElementById(`chart-${r.Ticker}`), {
-            type:'bar',
-            data:{
-              labels:['Price/share','Total value'],
-              datasets:[
-                { label:'Avg cost (USD)',       data:[avgUsd,null],   yAxisID:'USD', backgroundColor:'rgba(54,162,235,0.6)' },
-                { label:'Current price (USD)',   data:[priceUsd,null], yAxisID:'USD', backgroundColor:'rgba(255,159,64,0.6)' },
-                { label:'Total cost (NZD)',      data:[null,costNzd],  yAxisID:'NZD', backgroundColor:'rgba(75,192,192,0.6)' },
-                { label:'Market value (NZD)',    data:[null,mvNzd],    yAxisID:'NZD', backgroundColor:'rgba(153,102,255,0.6)' }
-              ]
-            },
-            options:{
-              responsive:true,
-              maintainAspectRatio:false,
-              scales:{
-                USD:{ type:'linear',position:'left',title:{display:true,text:'USD'} },
-                NZD:{ type:'linear',position:'right',title:{display:true,text:'NZD'},grid:{drawOnChartArea:false},
-                      ticks:{ callback:v=>'$'+v.toLocaleString() } }
-              },
-              plugins:{ legend:{ position:'bottom' } }
+              resolve();
+            }catch(err){
+              reject(err);
             }
-          });
+          },
+          error: err => reject(err)
         });
-      },
-      error: err => console.error(err)
+      });
+    }
+
+    // ---- Rendering ----
+    function renderAll(){
+      const perMember = memberToggle.checked ? 14 : 1;
+      setAsOf();
+
+      // Totals
+      let totalSpent = 0, totalValue = 0;
+      rawRows.forEach(r => {
+        const tcUsd = parseNum(r['Total Cost']);
+        const mvUsd = parseNum(r['Market Value']);
+        const mvNzd = parseNum(r['NZD']);
+        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
+        totalSpent += costNzd;
+        totalValue += mvNzd;
+      });
+      const totalProfit = totalValue - totalSpent;
+
+      $('#sumSpent').textContent = money(totalSpent);
+      $('#sumValue').textContent = money(totalValue);
+      const pEl = $('#sumProfit');
+      pEl.textContent = money(totalProfit);
+      pEl.classList.toggle('good', totalProfit >= 0);
+      pEl.classList.toggle('bad', totalProfit < 0);
+
+      // Clear grid and charts
+      charts.forEach((_, id) => destroyChart(id));
+      dash.innerHTML = '';
+
+      // Allocation pie
+      const pieCard = makeCard('Allocation ' + (perMember !== 1 ? '(per member)' : ''), 'Share of NZD value', 'pieBox', true);
+      dash.appendChild(pieCard.card);
+      const pieLabels = rawRows.map(r => r['Ticker']);
+      const pieData = rawRows.map(r => parseNum(r['NZD']) / perMember);
+      makePie('pieBox', pieLabels, pieData);
+
+      // Summary bar
+      const barCard = makeCard('Portfolio summary ' + (perMember !== 1 ? '(per member)' : ''), 'Spent, Profit, Value', 'barBox', true);
+      dash.appendChild(barCard.card);
+      makeBar('barBox', ['Spent','Profit','Value'], [totalSpent/perMember, (totalProfit)/perMember, totalValue/perMember]);
+
+      // Portfolio value line
+      const lineCard = makeCard('Portfolio value over time', 'From columns M and N', 'lineBox', true);
+      lineCard.card.classList.add('tall');
+      dash.appendChild(lineCard.card);
+      makeLine('lineBox', portfolioSeries.map(x => x.label), portfolioSeries.map(x => x.value));
+
+      // One card per holding
+      rawRows.forEach(r => {
+        const tcUsd = parseNum(r['Total Cost']);
+        const mvUsd = parseNum(r['Market Value']);
+        const mvNzd = parseNum(r['NZD']);
+        const avgUsd = parseNum(r['Average cost']);
+        const priceUsd = parseNum(r['Price']);
+        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
+        const profitNzd = mvNzd - costNzd;
+        const pctChange = parseNum(r['% Change']);
+
+        const id = 'card-' + r['Ticker'];
+        const card = makeCard(r['Ticker'], r['QTY'] + ' units, avg ' + money(avgUsd) + ' USD, price ' + money(priceUsd) + ' USD', id, true, profitNzd >= 0 ? 'profit' : 'loss');
+        dash.appendChild(card.card);
+
+        const labels = ['Cost', 'Value', 'Profit', '% Change'];
+        const nzData = [costNzd/perMember, mvNzd/perMember, profitNzd/perMember, null];
+        makeMixed(id, labels, nzData, pctChange);
+      });
+
+      statusBox.style.display = 'none';
+      dash.style.display = '';
+    }
+
+    function makeCard(title, sub, canvasId, withCanvas, extraClass){
+      const card = document.createElement('div');
+      card.className = 'card' + (extraClass ? ' ' + extraClass : '');
+      const h = document.createElement('h2'); h.textContent = title; card.appendChild(h);
+      const s = document.createElement('div'); s.className = 'sub'; s.textContent = sub || ''; card.appendChild(s);
+      if (withCanvas){
+        const box = document.createElement('div'); box.className = 'chart-box';
+        const c = document.createElement('canvas'); c.id = canvasId; box.appendChild(c);
+        card.appendChild(box);
+      }
+      return { card };
+    }
+
+    // ---- Charts ----
+    function makePie(id, labels, data){
+      destroyChart(id);
+      const ctx = document.getElementById(id).getContext('2d');
+      const c = new Chart(ctx, {
+        type:'doughnut',
+        data:{ labels, datasets:[{ data }] },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ position:'right', labels:{ color:'#fff' } } },
+          elements:{ arc:{ borderWidth:0 } }
+        }
+      });
+      charts.set(id, c);
+    }
+
+    function makeBar(id, labels, data){
+      destroyChart(id);
+      const ctx = document.getElementById(id).getContext('2d');
+      const c = new Chart(ctx, {
+        type:'bar',
+        data:{ labels, datasets:[{
+          label:'NZD',
+          data,
+          backgroundColor:['rgba(54,162,235,.6)','rgba(255,205,86,.6)','rgba(75,192,192,.6)']
+        }]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          scales:{
+            y:{ beginAtZero:true, grid:{ color:'#444', borderColor:'#444' }, ticks:{ callback:v=>'$'+v.toLocaleString(undefined,{minimumFractionDigits:2}) } },
+            x:{ grid:{ color:'#444' } }
+          },
+          plugins:{ legend:{ display:false } }
+        }
+      });
+      charts.set(id, c);
+    }
+
+    function makeLine(id, labels, data){
+      destroyChart(id);
+      const ctx = document.getElementById(id).getContext('2d');
+      // Dynamic y range with margin
+      let min = Math.min(...data), max = Math.max(...data);
+      const pad = Math.max(1, (max - min) * 0.1);
+      min = min - pad; max = max + pad;
+
+      const c = new Chart(ctx, {
+        type:'line',
+        data:{ labels, datasets:[{
+          label:'Portfolio value (NZD)',
+          data,
+          borderColor:'rgba(96,165,250,1)',
+          backgroundColor:'rgba(52,211,153,.15)',
+          tension:.2,
+          fill:true,
+          pointRadius:0
+        }]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          scales:{
+            y:{ min, max, grid:{ color:'#444', borderColor:'#444' }, ticks:{ callback:v=>'$'+v.toLocaleString(undefined,{minimumFractionDigits:2}) } },
+            x:{ grid:{ color:'#444' } }
+          },
+          plugins:{ legend:{ labels:{ color:'#fff' } }, tooltip:{ mode:'index', intersect:false } }
+        }
+      });
+      charts.set(id, c);
+    }
+
+    function makeMixed(id, labels, nzData, pct){
+      destroyChart(id);
+      const ctx = document.getElementById(id).getContext('2d');
+      const c = new Chart(ctx, {
+        data:{
+          labels,
+          datasets:[
+            { type:'bar', label:'NZD', data:nzData,
+              backgroundColor:['rgba(54,162,235,.6)','rgba(75,192,192,.6)','rgba(255,205,86,.6)', 'rgba(255,99,132,0)'] },
+            { type:'line', label:'% change', data:[null,null,null,pct],
+              yAxisID:'PCT', borderColor:'rgba(255,99,132,.9)', backgroundColor:'rgba(255,99,132,.4)',
+              tension:.3, pointRadius:4, fill:false }
+          ]
+        },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          scales:{
+            y:{ beginAtZero:true, title:{ display:true, text:'NZD', color:'#fff' }, grid:{ color:'#444' }, ticks:{ callback:v=>'$'+v.toLocaleString() } },
+            PCT:{ type:'linear', position:'right', title:{ display:true, text:'% change', color:'#fff' }, grid:{ drawOnChartArea:false }, ticks:{ callback:v=>v+'%' } }
+          },
+          plugins:{
+            legend:{ position:'bottom', labels:{ color:'#fff' } },
+            tooltip:{ callbacks:{
+              label: ctx => {
+                const isLine = ctx.dataset.type === 'line';
+                if (isLine) return '% change: ' + (ctx.parsed.y ?? 0) + '%';
+                return 'NZD ' + (ctx.parsed.y ?? 0).toLocaleString();
+              }
+            }}
+          }
+        }
+      });
+      charts.set(id, c);
+    }
+
+    // ---- Events, init ----
+    async function refresh(){
+      try{
+        await loadCsv();
+        renderAll();
+      }catch(err){
+        statusBox.innerHTML = '<span class="muted">Error loading CSV, check the sheet is published</span>';
+        console.error(err);
+      }
+    }
+
+    $('#btnRefresh').addEventListener('click', refresh);
+
+    // Member toggle with persistence
+    memberToggle.checked = loadMemberPref();
+    memberToggle.addEventListener('change', () => {
+      saveMemberPref(memberToggle.checked);
+      renderAll();
     });
+
+    // Auto refresh each 60s, opt in
+    const btnAuto = $('#btnAuto');
+    btnAuto.addEventListener('click', () => {
+      if (autoTimer){
+        clearInterval(autoTimer); autoTimer = null;
+        btnAuto.textContent = 'Auto refresh off';
+      } else {
+        autoTimer = setInterval(refresh, 60000);
+        btnAuto.textContent = 'Auto refresh on';
+      }
+    });
+
+    // Kick off
+    refresh();
   </script>
 </body>
 </html>
