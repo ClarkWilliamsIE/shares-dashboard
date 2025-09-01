@@ -89,6 +89,9 @@
   <!-- Polls area -->
   <div id="pollsArea" class="dashboard"></div>
 
+  <!-- Watchlist -->
+  <div id="watchlistArea" class="dashboard"></div>
+
   <!-- Your original dashboard -->
   <div class="dashboard" id="dashboard"></div>
 
@@ -147,6 +150,8 @@
     document.getElementById("signOutBtn").addEventListener("click", async () => {
       await supabase.auth.signOut();
       updateAuthUI();
+    // also refresh watchlist on any auth change
+    supabase.auth.onAuthStateChange(() => { updateAuthUI(); renderWatchlist(); });
     });
 
     supabase.auth.onAuthStateChange(() => updateAuthUI());
@@ -257,6 +262,7 @@
         renderCharts(false);
         document.getElementById('memberToggle').addEventListener('change', e => renderCharts(e.target.checked));
         renderPolls();
+        renderWatchlist();
       },
       error: err => console.error('CSV load error:', err)
     });
@@ -370,7 +376,137 @@
         });
       });
     }
+    /* =============================
+       2. Watchlist (add and second)
+     ============================= */
+    const VOTE_THRESHOLD = 6; // required seconds to confirm
+    const SHEETS_WEBHOOK_URL = ""; // optional, paste your Apps Script web app URL here
+    const SHEETS_SECRET = ""; // optional, a shared secret the web app verifies
+
+    async function getUserSecondsMap() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return new Set();
+      const { data } = await supabase
+        .from('watch_seconds')
+        .select('watch_id')
+        .eq('user_id', user.id);
+      return new Set((data || []).map(r => r.watch_id));
+    }
+
+    async function renderWatchlist() {
+      const area = document.getElementById('watchlistArea');
+      if (!area) return;
+      area.innerHTML = '';
+
+      // Add form card
+      const formCard = document.createElement('div');
+      formCard.className = 'chart-card';
+      formCard.innerHTML = `
+        <h2>Watchlist</h2>
+        <div class="hint center">Any signed in member can add a ticker. Others can second it. When seconds reach ${VOTE_THRESHOLD}, the item is confirmed.</div>
+        <form id="addWatchForm" class="poll-row" autocomplete="off">
+          <input id="wlTicker" placeholder="Ticker (for example, AAPL)" style="padding:.5rem;border-radius:8px;border:1px solid #333;background:#1e1e1e;color:#fff;min-width:200px" />
+          <input id="wlNote" placeholder="Note (optional)" style="padding:.5rem;border-radius:8px;border:1px solid #333;background:#1e1e1e;color:#fff;min-width:250px" />
+          <button class="primary" type="submit">Add to watchlist</button>
+        </form>
+        <div class="hint center" id="wlHint"></div>
+      `;
+      area.appendChild(formCard);
+
+      // Disable form for guests
+      const wlHint = formCard.querySelector('#wlHint');
+      if (!isAuthed()) {
+        formCard.querySelector('button').disabled = true;
+        wlHint.textContent = 'Sign in to add items.';
+      } else {
+        wlHint.textContent = '';
+      }
+
+      // Handle submit
+      formCard.querySelector('#addWatchForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const ticker = String(formCard.querySelector('#wlTicker').value || '').trim().toUpperCase();
+        const note = String(formCard.querySelector('#wlNote').value || '').trim();
+        if (!ticker) { alert('Enter a ticker'); return; }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { alert('Please sign in'); return; }
+        const { data, error } = await supabase
+          .from('watchlist')
+          .insert({ ticker, note, added_by: user.id })
+          .select('*')
+          .single();
+        if (error) { alert(error.message); return; }
+        // optional sync to Google Sheets
+        syncToSheets({ action: 'add', ticker, added_by_email: user.email, added_at: new Date().toISOString(), watch_id: data.id });
+        renderWatchlist();
+      });
+
+      // Fetch items and the user's seconds
+      const [itemsRes, mySecondsSet] = await Promise.all([
+        supabase.from('watchlist_with_counts').select('*').order('created_at', { ascending: false }),
+        getUserSecondsMap()
+      ]);
+      const items = itemsRes.data || [];
+
+      // Render each watch item
+      for (const item of items) {
+        const card = document.createElement('div');
+        card.className = 'chart-card';
+        const confirmed = Number(item.seconds_count || 0) >= VOTE_THRESHOLD || item.confirmed === true;
+        card.style.border = confirmed ? '3px solid var(--green)' : '3px solid transparent';
+        const youSeconded = mySecondsSet.has(item.id);
+        card.innerHTML = `
+          <h2>${item.ticker}${confirmed ? ' (Confirmed)' : ''}</h2>
+          <div class="hint center">Added ${new Date(item.created_at).toLocaleString()}${item.added_by_email ? ` by ${item.added_by_email}` : ''}${item.note ? `, ${item.note}` : ''}</div>
+          <div class="center" style="margin-top:.5rem">${item.seconds_count || 0} of ${VOTE_THRESHOLD} seconds</div>
+          <div class="poll-row">
+            <button data-second-btn data-id="${item.id}" ${confirmed || youSeconded ? 'disabled' : ''} class="primary">${youSeconded ? 'You seconded' : confirmed ? 'Confirmed' : 'Second this'}</button>
+            <button data-copy-btn data-ticker="${item.ticker}">Copy ticker</button>
+          </div>
+        `;
+        area.appendChild(card);
+      }
+
+      // Wire up second buttons and copy
+      area.addEventListener('click', async e => {
+        const secBtn = e.target.closest('[data-second-btn]');
+        if (secBtn) {
+          const id = secBtn.getAttribute('data-id');
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) { alert('Please sign in'); return; }
+          const { error } = await supabase.from('watch_seconds').insert({ watch_id: id, user_id: user.id });
+          if (error) {
+            if ((error.message || '').toLowerCase().includes('duplicate')) alert('You already seconded this');
+            else alert(error.message);
+          } else {
+            // optional sync to Sheets for seconds
+            syncToSheets({ action: 'second', watch_id: id });
+          }
+          renderWatchlist();
+        }
+        const copyBtn = e.target.closest('[data-copy-btn]');
+        if (copyBtn) {
+          const t = copyBtn.getAttribute('data-ticker');
+          navigator.clipboard.writeText(t).then(() => {
+            copyBtn.textContent = 'Copied';
+            setTimeout(() => copyBtn.textContent = 'Copy ticker', 1000);
+          });
+        }
+      });
+    }
+
+    async function syncToSheets(payload) {
+      if (!SHEETS_WEBHOOK_URL) { console.info('Sheets sync skipped, set SHEETS_WEBHOOK_URL to enable. Payload:', payload); return; }
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (SHEETS_SECRET) headers['X-Secret'] = SHEETS_SECRET;
+        await fetch(SHEETS_WEBHOOK_URL, { method: 'POST', headers, body: JSON.stringify(payload) });
+      } catch (e) {
+        console.warn('Sheets sync failed', e);
+      }
+    }
   </script>
 </body>
 </html>
+
 
