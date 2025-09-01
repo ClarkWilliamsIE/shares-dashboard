@@ -74,10 +74,25 @@
 
     <div class="authbar" id="authBar">
       <span id="authStatus" class="pill">Not signed in</span>
-      <input id="emailInput" type="email" placeholder="email for magic link" />
-      <button id="sendLinkBtn" class="primary">Send login link</button>
-      <button id="googleBtn" class="google">Sign in with Google</button>
-      <button id="signOutBtn" class="danger" style="display:none">Sign out</button>
+      <div class="pill" style="gap:.4rem">
+        <label style="display:inline-flex;align-items:center;gap:.4rem;cursor:pointer">
+          <input id="rememberChk" type="checkbox" checked> Stay signed in
+        </label>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center">
+        <input id="emailInput" type="email" placeholder="email" />
+        <input id="passwordInput" type="password" placeholder="password" />
+        <button id="signinBtn" class="primary">Sign in</button>
+        <button id="signupBtn">Create account</button>
+        <button id="magicBtn">Magic link</button>
+        <button id="googleBtn" class="google">Google</button>
+        <button id="forgotBtn">Forgot password</button>
+        <button id="signOutBtn" class="danger" style="display:none">Sign out</button>
+      </div>
+      <div id="setPwRow" style="display:none;gap:.5rem;align-items:center;justify-content:center;margin-top:.5rem">
+        <input id="newPw" type="password" placeholder="set new password" />
+        <button id="setPwBtn">Set password</button>
+      </div>
     </div>
 
     <div id="setupBanner" class="banner" style="display:none">
@@ -101,145 +116,131 @@
        ============================= */
     const supabaseUrl = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
-    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+    function makeClient(persist) {
+      return window.supabase.createClient(supabaseUrl, supabaseKey, {
+        auth: {
+          persistSession: persist,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storage: persist ? localStorage : sessionStorage
+        }
+      });
+    }
+
+    let supabase = makeClient(true);
+    let authListener = null;
+
+    function attachAuthListener() {
+      if (authListener && authListener.subscription) authListener.subscription.unsubscribe();
+      authListener = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          const row = document.getElementById('setPwRow');
+          if (row) row.style.display = 'flex';
+        }
+        updateAuthUI();
+        if (typeof renderWatchlist === 'function') renderWatchlist();
+      });
+    }
+    attachAuthListener();
 
     async function updateAuthUI() {
       const { data: { user } } = await supabase.auth.getUser();
       const status = document.getElementById("authStatus");
       const emailInput = document.getElementById("emailInput");
-      const sendLinkBtn = document.getElementById("sendLinkBtn");
+      const passwordInput = document.getElementById("passwordInput");
+      const signinBtn = document.getElementById("signinBtn");
+      const signupBtn = document.getElementById("signupBtn");
+      const magicBtn = document.getElementById("magicBtn");
       const googleBtn = document.getElementById("googleBtn");
+      const forgotBtn = document.getElementById("forgotBtn");
       const signOutBtn = document.getElementById("signOutBtn");
+      const setPwRow = document.getElementById("setPwRow");
 
       if (user) {
         status.textContent = `Signed in as ${user.email}`;
-        emailInput.style.display = "none";
-        sendLinkBtn.style.display = "none";
-        googleBtn.style.display = "none";
         signOutBtn.style.display = "inline-block";
-        document.body.dataset.authed = "true";
+        setPwRow.style.display = "flex"; // allow setting a password any time you are signed in
       } else {
         status.textContent = "Not signed in";
-        emailInput.style.display = "inline-block";
-        sendLinkBtn.style.display = "inline-block";
-        googleBtn.style.display = "inline-block";
         signOutBtn.style.display = "none";
-        document.body.dataset.authed = "false";
+        setPwRow.style.display = "none";
       }
       gatePollControls();
     }
 
-    document.getElementById("sendLinkBtn").addEventListener("click", async () => {
-      const email = document.getElementById("emailInput").value.trim();
-      if (!email) { alert("Enter your email"); return; }
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: window.location.href }
-      });
-      if (error) alert(error.message); else alert("Check your email for the magic link");
+    function persistFromUI() {
+      const remember = document.getElementById('rememberChk');
+      return remember ? !!remember.checked : true;
+    }
+
+    async function withClientForPersist(fn) {
+      // Create a fresh client using chosen persistence before starting the auth flow
+      supabase = makeClient(persistFromUI());
+      attachAuthListener();
+      return await fn();
+    }
+
+    // Email, password sign in
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'signinBtn') {
+        withClientForPersist(async () => {
+          const email = document.getElementById('emailInput').value.trim();
+          const password = document.getElementById('passwordInput').value;
+          if (!email || !password) { alert('Enter email and password'); return; }
+          const { error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) alert(error.message);
+        });
+      }
+      if (e.target && e.target.id === 'signupBtn') {
+        withClientForPersist(async () => {
+          const email = document.getElementById('emailInput').value.trim();
+          const password = document.getElementById('passwordInput').value;
+          if (!email || !password) { alert('Enter email and a password'); return; }
+          const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { emailRedirectTo: window.location.href }
+          });
+          if (error) alert(error.message); else alert('Check your email to confirm your account');
+        });
+      }
+      if (e.target && e.target.id === 'magicBtn') {
+        withClientForPersist(async () => {
+          const email = document.getElementById('emailInput').value.trim();
+          if (!email) { alert('Enter your email'); return; }
+          const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+          if (error) alert(error.message); else alert('Check your email for the magic link');
+        });
+      }
+      if (e.target && e.target.id === 'googleBtn') {
+        withClientForPersist(async () => {
+          const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
+          if (error) alert(error.message);
+        });
+      }
+      if (e.target && e.target.id === 'forgotBtn') {
+        withClientForPersist(async () => {
+          const email = document.getElementById('emailInput').value.trim();
+          if (!email) { alert('Enter your email'); return; }
+          const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+          if (error) alert(error.message); else alert('Check your email for a password reset link');
+        });
+      }
+      if (e.target && e.target.id === 'signOutBtn') {
+        (async () => { await supabase.auth.signOut(); updateAuthUI(); })();
+      }
+      if (e.target && e.target.id === 'setPwBtn') {
+        (async () => {
+          const newPw = document.getElementById('newPw').value;
+          if (!newPw) { alert('Enter a new password'); return; }
+          const { error } = await supabase.auth.updateUser({ password: newPw });
+          if (error) alert(error.message); else alert('Password updated');
+        })();
+      }
     });
 
-    document.getElementById("googleBtn").addEventListener("click", async () => {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.href }
-      });
-      if (error) alert(error.message);
-    });
-
-    document.getElementById("signOutBtn").addEventListener("click", async () => {
-      await supabase.auth.signOut();
-      updateAuthUI();
-    // also refresh watchlist on any auth change
-    supabase.auth.onAuthStateChange(() => { updateAuthUI(); renderWatchlist(); });
-    });
-
-    supabase.auth.onAuthStateChange(() => updateAuthUI());
     updateAuthUI();
-
-    function isAuthed() { return document.body.dataset.authed === "true"; }
-    function gatePollControls() {
-      const voteButtons = document.querySelectorAll("[data-vote-btn]");
-      voteButtons.forEach(btn => { btn.disabled = !isAuthed(); btn.title = isAuthed() ? "" : "Sign in to vote"; });
-      const submitPollBtn = document.querySelector("[data-submit-poll]");
-      if (submitPollBtn) { submitPollBtn.disabled = !isAuthed(); submitPollBtn.title = isAuthed() ? "" : "Sign in to submit"; }
-    }
-
-    async function castVote(pollId, optionId) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { alert("Please sign in to vote"); return; }
-      const { error } = await supabase.from("votes").insert({ poll_id: pollId, option_id: optionId, user_id: user.id });
-      if (error) {
-        if ((error.message || "").toLowerCase().includes("duplicate")) alert("You have already voted in this poll");
-        else alert(error.message);
-      } else {
-        alert("Vote recorded");
-        updateResultsBlock(pollId);
-      }
-    }
-
-    async function getPollResults(pollId) {
-      const { data, error } = await supabase.from("poll_results").select("*").eq("poll_id", pollId);
-      if (error) return [];
-      return data || [];
-    }
-
-    async function updateResultsBlock(pollId) {
-      const resDiv = document.getElementById(`res-${pollId}`);
-      if (!resDiv) return;
-      const rows = await getPollResults(pollId);
-      const total = rows.reduce((s, r) => s + (r.votes || 0), 0) || 0;
-      resDiv.textContent = rows.map(r => {
-        const pct = total ? Math.round((r.votes * 100) / total) : 0;
-        return `${r.label}: ${r.votes} (${pct}%)`;
-      }).join("  |  ");
-    }
-
-    document.addEventListener("click", e => {
-      const btn = e.target.closest("[data-vote-btn]");
-      if (!btn) return;
-      const pollId = btn.getAttribute("data-poll");
-      const optionId = btn.getAttribute("data-option");
-      castVote(pollId, optionId);
-    });
-
-    async function renderPolls() {
-      const pollsArea = document.getElementById("pollsArea");
-      pollsArea.innerHTML = "";
-      let polls = [];
-      try {
-        const { data, error } = await supabase.from("polls").select("*").order("created_at", { ascending: false });
-        if (error) throw error;
-        polls = data || [];
-      } catch (e) {
-        document.getElementById("setupBanner").style.display = "block";
-        return;
-      }
-
-      if (!polls.length) {
-        document.getElementById("setupBanner").style.display = "block";
-      }
-
-      for (const poll of polls) {
-        const { data: options } = await supabase.from("poll_options").select("*").eq("poll_id", poll.id);
-        const card = document.createElement("div");
-        card.className = "chart-card";
-        card.innerHTML = `
-          <h2>${poll.title}</h2>
-          <div class="poll-row">
-            ${(options || []).map(o => `
-              <button data-vote-btn data-poll="${poll.id}" data-option="${o.id}" style="padding:.5rem .75rem;border-radius:8px;border:0;background:var(--blue);color:#fff;cursor:pointer;box-shadow:var(--shadow)">
-                ${o.label}
-              </button>
-            `).join("")}
-          </div>
-          <div id="res-${poll.id}" class="center hint" style="margin-top:.5rem"></div>
-        `;
-        pollsArea.appendChild(card);
-        updateResultsBlock(poll.id);
-      }
-      gatePollControls();
-    }
 
     /* =============================
        1. Your existing chart page
@@ -508,5 +509,6 @@
   </script>
 </body>
 </html>
+
 
 
