@@ -381,8 +381,8 @@
        2. Watchlist (add and second)
      ============================= */
     const VOTE_THRESHOLD = 6; // required seconds to confirm
-    const SHEETS_WEBHOOK_URL = ""; // optional, paste your Apps Script web app URL here
-    const SHEETS_SECRET = ""; // optional, a shared secret the web app verifies
+    const SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwqMiEYy9R2zbFC5i6Ye0cMG_l46IrnQp5TK-UxZ5KyXWgPh0FbYaWmI6Ef_Jr8ps_fcA/exec"; // paste your Apps Script Web App URL here
+    const SHEETS_SECRET = "winnerland"; // shared secret, must match your Apps Script SHARED_SECRET
 
     async function getUserSecondsMap() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -499,6 +499,17 @@
     async function syncToSheets(payload) {
       if (!SHEETS_WEBHOOK_URL) { console.info('Sheets sync skipped, set SHEETS_WEBHOOK_URL to enable. Payload:', payload); return; }
       try {
+        const body = { ...payload, secret: SHEETS_SECRET };
+        await fetch(SHEETS_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      } catch (e) {
+        console.warn('Sheets sync failed', e);
+      }
+    }
+      try {
         const headers = { 'Content-Type': 'application/json' };
         if (SHEETS_SECRET) headers['X-Secret'] = SHEETS_SECRET;
         await fetch(SHEETS_WEBHOOK_URL, { method: 'POST', headers, body: JSON.stringify(payload) });
@@ -509,6 +520,7 @@
   </script>
 </body>
 </html>
+
 
 
 
