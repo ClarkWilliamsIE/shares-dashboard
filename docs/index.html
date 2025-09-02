@@ -3,182 +3,348 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Winnerland</title>
+  <title>Winnerland with Login</title>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-  <!-- Supabase client -->
+  <!-- Supabase JS v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     :root {
-      --bg: #0f1115;
-      --card: #151821;
-      --text: #fff;
-      --muted: #a9b0c0;
-      --blue: #3b82f6;
-      --green: #22c55e;
-      --red: #ef4444;
-      --ring: rgba(59,130,246,.4);
-      --shadow: 0 8px 24px rgba(0,0,0,.35);
+      color-scheme: dark;
     }
-    * { box-sizing: border-box; }
-    body { margin: 0, padding: 24px, font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Noto Sans, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
-    h1 { text-align: center, margin: 0 0 12px, letter-spacing: .5px; }
+    body {
+      margin: 0;
+      padding: 1rem;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #121212;
+      color: #fff;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 0.25rem;
+      color: #fff;
+    }
 
-    .grid { display: grid, grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)), gap: 16px, margin-top: 16px; }
-    .card { background: linear-gradient(180deg, #171a24, #141725), border: 1px solid rgba(255,255,255,.06), border-radius: 14px, box-shadow: var(--shadow), padding: 16px; }
-    .card h2 { margin: 0 0 10px, font-size: 18px, text-align: center, font-weight: 600; }
-    .chart { position: relative, height: 220px; }
-    .chart canvas { width: 100% !important, height: 100% !important; }
-
-    .auth { display: grid, gap: 10px, justify-items: center; }
-    .auth .row { display: flex, flex-wrap: wrap, gap: 8px, justify-content: center; }
-    .auth input { padding: 10px 12px, background: #0f1320, color: var(--text), border: 1px solid rgba(255,255,255,.08), border-radius: 10px, min-width: 220px, outline: none; }
-    .auth input:focus { border-color: var(--blue), box-shadow: 0 0 0 3px var(--ring); }
-    .seg { display: inline-flex, background: #0f1320, border: 1px solid rgba(255,255,255,.08), border-radius: 10px, overflow: hidden; }
-    .seg button { padding: 8px 12px, background: transparent, color: var(--muted), border: 0, cursor: pointer; }
-    .seg button.active { background: var(--blue), color: white; }
-    .btn { padding: 10px 14px, border: 0, border-radius: 10px, cursor: pointer, box-shadow: var(--shadow); }
-    .btn.primary { background: var(--blue), color: white; }
-    .btn.danger { background: var(--red), color: white; }
-    .pill { display: inline-flex, align-items: center, gap: 8px, padding: 6px 10px, background: #0f1320, border: 1px solid rgba(255,255,255,.08), border-radius: 999px, color: var(--muted); }
-    .hidden { display: none !important; }
-
-    .top { display: grid, gap: 14px, justify-items: center, margin-bottom: 8px; }
-    .switch { position: relative, width: 50px, height: 26px; }
-    .switch input { opacity: 0, width: 0, height: 0; }
-    .slider { position: absolute, inset: 0, cursor: pointer, background: #2a3042, border-radius: 26px, transition: .2s; }
-    .slider:before { content: "", position: absolute, height: 18px, width: 18px, left: 4px, bottom: 4px, background: white, border-radius: 999px, transition: .2s; }
-    input:checked + .slider { background: var(--blue); }
+    /* switch styling */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 26px;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background-color: #333; transition: .2s; border-radius: 26px;
+    }
+    .slider:before {
+      position: absolute; content: "";
+      height: 18px; width: 18px; left: 4px; bottom: 4px;
+      background-color: white; transition: .2s; border-radius: 50%;
+    }
+    input:checked + .slider { background-color: #2196F3; }
     input:checked + .slider:before { transform: translateX(24px); }
+
+    /* dashboard grid */
+    .dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .chart-card {
+      background: #1e1e1e;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      padding: 1rem;
+      display: flex; flex-direction: column;
+      border: 3px solid transparent;
+    }
+    .chart-card h2 { margin: 0 0 0.5rem; font-size: 1.1rem; text-align: center; color: #fff; }
+    .chart-container { position: relative; flex: 1; height: 200px; }
+    .chart-container canvas { width: 100% !important; height: 100% !important; }
+
+    /* Auth UI */
+    .auth-shell { max-width: 980px; margin: 0.25rem auto 0; }
+    .auth-bar, .auth-panels {
+      display: flex; justify-content: center; align-items: center; gap: .5rem; flex-wrap: wrap;
+    }
+    .auth-panels { margin-top: .5rem; }
+    .auth-card {
+      background: #1e1e1e; border: 1px solid #333; border-radius: 10px; padding: 1rem; width: 100%; max-width: 700px;
+    }
+    .auth-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .auth-row + .auth-row { margin-top: .5rem; }
+    .auth-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .75rem; }
+    .auth-muted { color: #aaa; font-size: .9rem; }
+
+    .btn, .input, .checkbox {
+      font: inherit; color: #fff; background: #232323; border: 1px solid #3a3a3a; border-radius: 8px;
+    }
+    .input { padding: .5rem .6rem; width: 100%; }
+    .btn { padding: .5rem .8rem; cursor: pointer; }
+    .btn.primary { background: #2563eb; border-color: #2563eb; }
+    .btn.ghost { background: transparent; }
+
+    .tabbar { display: inline-flex; border: 1px solid #333; border-radius: 10px; overflow: hidden; }
+    .tabbar button { padding: .5rem .8rem; background: #1b1b1b; border: none; color: #ddd; cursor: pointer; }
+    .tabbar button.active { background: #2563eb; color: #fff; }
+
+    .flex-center { text-align: center; }
+    .spacer-xs { height: .25rem; }
+    .spacer-sm { height: .5rem; }
+
+    [data-auth-only] { display: none; }
+
+    .pill {
+      display: inline-flex; align-items: center; gap: .5rem; padding: .4rem .6rem; border: 1px solid #333; border-radius: 999px; background: #1b1b1b; color: #ddd;
+    }
   </style>
 </head>
+
 <body>
   <h1>Winnerland</h1>
 
-  <div class="top">
-    <div class="pill">
-      <label class="switch">
-        <input type="checkbox" id="memberToggle" />
-        <span class="slider"></span>
-      </label>
-      <span>Member view</span>
+  <div class="auth-shell">
+    <!-- Signed in summary bar -->
+    <div id="signedInUI" class="auth-bar" style="display:none;">
+      <span class="pill">Signed in as <strong id="userLabel">User</strong></span>
+      <button id="signOutBtn" class="btn">Sign out</button>
     </div>
 
-    <div id="authCard" class="card auth" style="max-width:880px, width:100%">
-      <div class="row" id="authStatusRow">
-        <span id="authStatus" class="pill">Not signed in</span>
-        <label class="pill" style="cursor:pointer">
-          <input id="rememberChk" type="checkbox" checked /> Stay signed in
-        </label>
-      </div>
-
-      <div class="row" id="modeRow">
-        <div class="seg">
-          <button id="modeSignin" class="active" type="button">Sign in</button>
-          <button id="modeSignup" type="button">Create account</button>
+    <!-- Tabs for Login and Sign up when signed out -->
+    <div id="signedOutUI" style="display:none;">
+      <div class="flex-center">
+        <div class="tabbar" role="tablist" aria-label="Auth tabs">
+          <button id="tabLogin" class="active" aria-selected="true" aria-controls="panelLogin">Log in</button>
+          <button id="tabSignup" aria-selected="false" aria-controls="panelSignup">Create account</button>
         </div>
       </div>
+      <div class="spacer-sm"></div>
 
-      <div id="authFormRow" class="row">
-        <input id="emailInput" type="email" placeholder="email" />
-        <input id="passwordInput" type="password" placeholder="password" />
-        <input id="passwordConfirm" type="password" placeholder="confirm password" class="hidden" />
-        <button id="authPrimaryBtn" class="btn primary" type="button">Sign in</button>
-      </div>
+      <div class="auth-panels">
+        <!-- Login panel -->
+        <section id="panelLogin" class="auth-card" role="tabpanel" aria-labelledby="tabLogin">
+          <form id="loginForm">
+            <div class="auth-row">
+              <input id="loginEmail" class="input" type="email" placeholder="you@example.com" autocomplete="email" required />
+              <input id="loginPassword" class="input" type="password" placeholder="Password" autocomplete="current-password" required />
+            </div>
+            <div class="auth-actions">
+              <label class="pill"><input id="rememberMe" type="checkbox" class="checkbox" /> Stay logged in</label>
+              <button class="btn primary" type="submit">Log in</button>
+              <button type="button" class="btn ghost" id="forgotBtn">Forgot password</button>
+            </div>
+            <div id="loginMsg" class="auth-muted" aria-live="polite"></div>
+          </form>
+        </section>
 
-      <div id="signedInRow" class="row hidden">
-        <button id="signOutBtn" class="btn danger" type="button">Sign out</button>
+        <!-- Signup panel -->
+        <section id="panelSignup" class="auth-card" role="tabpanel" aria-labelledby="tabSignup" style="display:none;">
+          <form id="signupForm">
+            <div class="auth-row">
+              <input id="signupEmail" class="input" type="email" placeholder="you@example.com" autocomplete="email" required />
+              <input id="signupPassword" class="input" type="password" placeholder="Create a password" autocomplete="new-password" minlength="6" required />
+            </div>
+            <div class="auth-row">
+              <input id="signupPassword2" class="input" type="password" placeholder="Confirm password" autocomplete="new-password" minlength="6" required />
+              <input id="signupName" class="input" type="text" placeholder="Display name (optional)" autocomplete="name" />
+            </div>
+            <div class="auth-actions">
+              <button class="btn primary" type="submit">Create account</button>
+              <span class="auth-muted">You can set a new password later in account settings</span>
+            </div>
+            <div id="signupMsg" class="auth-muted" aria-live="polite"></div>
+          </form>
+        </section>
       </div>
     </div>
   </div>
 
-  <div class="grid" id="dashboard"></div>
+  <div class="spacer-sm"></div>
 
+  <!-- Public member toggle, you can add data-auth-only to hide behind login if you prefer -->
+  <div class="flex-center">
+    <label class="switch">
+      <input type="checkbox" id="memberToggle" />
+      <span class="slider"></span>
+    </label>
+    <span>Member view</span>
+  </div>
+
+  <div class="dashboard" id="dashboard"></div>
+
+  <!-- Auth logic -->
   <script>
-    // Supabase
     const supabaseUrl = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
-    function makeClient(persist) {
-      return window.supabase.createClient(supabaseUrl, supabaseKey, {
-        auth: { persistSession: persist, autoRefreshToken: true, detectSessionInUrl: true, storage: persist ? localStorage : sessionStorage }
+
+    function createClient(remember) {
+      return supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          storage: remember ? window.localStorage : window.sessionStorage,
+        },
       });
     }
-    let supabase = makeClient(true);
 
-    // Auth mode
-    let authMode = "signin";
-    function setMode(mode) {
-      authMode = mode;
-      document.getElementById("modeSignin").classList.toggle("active", mode === "signin");
-      document.getElementById("modeSignup").classList.toggle("active", mode === "signup");
-      document.getElementById("passwordConfirm").classList.toggle("hidden", mode !== "signup");
-      document.getElementById("authPrimaryBtn").textContent = mode === "signin" ? "Sign in" : "Create account";
+    // Remember flag is stored in localStorage so it survives reloads
+    let rememberPref = localStorage.getItem("rememberLogin") === "true";
+    let sb = createClient(rememberPref);
+
+    const signedInUI = document.getElementById("signedInUI");
+    const signedOutUI = document.getElementById("signedOutUI");
+    const userLabel = document.getElementById("userLabel");
+
+    const tabLogin = document.getElementById("tabLogin");
+    const tabSignup = document.getElementById("tabSignup");
+    const panelLogin = document.getElementById("panelLogin");
+    const panelSignup = document.getElementById("panelSignup");
+
+    function selectTab(which) {
+      const loginActive = which === "login";
+      tabLogin.classList.toggle("active", loginActive);
+      tabSignup.classList.toggle("active", !loginActive);
+      tabLogin.setAttribute("aria-selected", loginActive);
+      tabSignup.setAttribute("aria-selected", !loginActive);
+      panelLogin.style.display = loginActive ? "block" : "none";
+      panelSignup.style.display = loginActive ? "none" : "block";
     }
 
-    function persistFromUI() {
-      const remember = document.getElementById("rememberChk");
-      return remember ? !!remember.checked : true;
-    }
-    function swapClientForPersist() { supabase = makeClient(persistFromUI()); }
+    tabLogin.addEventListener("click", () => selectTab("login"));
+    tabSignup.addEventListener("click", () => selectTab("signup"));
 
-    async function updateAuthUI() {
-      const { data: { user } } = await supabase.auth.getUser();
-      const status = document.getElementById("authStatus");
-      const authFormRow = document.getElementById("authFormRow");
-      const modeRow = document.getElementById("modeRow");
-      const signedInRow = document.getElementById("signedInRow");
-      const signOutBtn = document.getElementById("signOutBtn");
+    async function refreshAuthUI() {
+      const { data: { session } } = await sb.auth.getSession();
 
-      if (user) {
-        status.textContent = `Signed in as ${user.email}`;
-        authFormRow.classList.add("hidden");
-        modeRow.classList.add("hidden");
-        signedInRow.classList.remove("hidden");
-        if (signOutBtn) signOutBtn.style.display = "inline-block";
+      // Toggle auth only elements
+      document.querySelectorAll('[data-auth-only]').forEach(el => {
+        el.style.display = session ? "" : "none";
+      });
+
+      if (session) {
+        const u = session.user;
+        userLabel.textContent = u.user_metadata?.name || u.email || "User";
+        signedInUI.style.display = "flex";
+        signedOutUI.style.display = "none"; // signup features disappear when signed in
       } else {
-        status.textContent = "Not signed in";
-        signedInRow.classList.add("hidden");
-        modeRow.classList.remove("hidden");
-        authFormRow.classList.remove("hidden");
-        if (signOutBtn) signOutBtn.style.display = "none";
+        signedInUI.style.display = "none";
+        signedOutUI.style.display = "block";
+        // Reflect current remember choice in the checkbox
+        const rememberMe = document.getElementById("rememberMe");
+        if (rememberMe) rememberMe.checked = rememberPref;
       }
     }
 
-    supabase.auth.onAuthStateChange(() => updateAuthUI());
-    document.getElementById("modeSignin").addEventListener("click", () => setMode("signin"));
-    document.getElementById("modeSignup").addEventListener("click", () => setMode("signup"));
+    sb.auth.onAuthStateChange(() => refreshAuthUI());
+    window.addEventListener("DOMContentLoaded", refreshAuthUI);
 
-    document.getElementById("authPrimaryBtn").addEventListener("click", async () => {
-      swapClientForPersist();
-      const email = document.getElementById("emailInput").value.trim();
-      const password = document.getElementById("passwordInput").value;
-      if (!email || !password) { alert("Enter email and password"); return; }
+    // Login
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("loginEmail").value.trim();
+      const password = document.getElementById("loginPassword").value;
+      const rememberMe = document.getElementById("rememberMe").checked;
+      const msg = document.getElementById("loginMsg");
+      msg.textContent = "";
 
-      if (authMode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) alert(error.message);
-      } else {
-        const confirm = document.getElementById("passwordConfirm").value;
-        if (password !== confirm) { alert("Passwords do not match"); return; }
-        const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.href } });
-        if (error) alert(error.message); else alert("Check your email to confirm your account");
+      try {
+        if (rememberMe !== rememberPref) {
+          rememberPref = rememberMe;
+          if (rememberPref) localStorage.setItem("rememberLogin", "true");
+          else localStorage.removeItem("rememberLogin");
+          sb = createClient(rememberPref);
+        }
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        msg.textContent = "Logged in";
+        await refreshAuthUI();
+      } catch (err) {
+        msg.textContent = "Login failed, " + err.message;
       }
     });
 
+    // Forgot password, sends a reset link that returns to this page
+    document.getElementById("forgotBtn").addEventListener("click", async () => {
+      const email = document.getElementById("loginEmail").value.trim();
+      const msg = document.getElementById("loginMsg");
+      if (!email) { msg.textContent = "Enter your email first"; return; }
+      const redirectTo = window.location.origin + window.location.pathname;
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) msg.textContent = "Reset failed, " + error.message;
+      else msg.textContent = "Check your email for the reset link";
+    });
+
+    // Handle update password if user arrived from a reset link
+    (async function handleHashRecovery() {
+      const hash = window.location.hash;
+      if (!hash.includes("type=recovery")) return;
+      const newPass = prompt("Enter a new password");
+      if (!newPass) return;
+      const { error } = await sb.auth.updateUser({ password: newPass });
+      if (error) alert("Password update failed, " + error.message);
+      else alert("Password updated");
+    })();
+
+    // Sign up
+    document.getElementById("signupForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("signupEmail").value.trim();
+      const pw1 = document.getElementById("signupPassword").value;
+      const pw2 = document.getElementById("signupPassword2").value;
+      const name = document.getElementById("signupName").value.trim();
+      const msg = document.getElementById("signupMsg");
+      msg.textContent = "";
+      if (pw1 !== pw2) { msg.textContent = "Passwords do not match"; return; }
+      if (pw1.length < 6) { msg.textContent = "Password must be at least 6 characters"; return; }
+
+      try {
+        const redirectTo = window.location.origin + window.location.pathname;
+        const { data, error } = await sb.auth.signUp({
+          email,
+          password: pw1,
+          options: { data: { name }, emailRedirectTo: redirectTo },
+        });
+        if (error) throw error;
+
+        if (!data.session) {
+          msg.textContent = "Account created, check your email to confirm";
+          selectTab("login");
+        } else {
+          // Immediate session if email confirmation is disabled in Supabase
+          msg.textContent = "Account created";
+          await refreshAuthUI();
+        }
+      } catch (err) {
+        msg.textContent = "Sign up failed, " + err.message;
+      }
+    });
+
+    // Sign out
     document.getElementById("signOutBtn").addEventListener("click", async () => {
-      await supabase.auth.signOut();
-      updateAuthUI();
+      try {
+        await sb.auth.signOut();
+        // Clean up any stray sessions in both storages
+        try { window.localStorage.clear(); } catch {}
+        try { window.sessionStorage.clear(); } catch {}
+      } finally {
+        await refreshAuthUI();
+      }
     });
+  </script>
 
-    setMode("signin");
-    updateAuthUI();
+  <!-- Existing Winnerland charts logic, unchanged except for being below auth code -->
+  <script>
+    const csvUrl =
+      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
-    // Charts
-    const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv";
     let rawRows = [];
     let portfolioData = [];
 
@@ -186,119 +352,212 @@
       download: true,
       header: true,
       complete: ({ data }) => {
-        rawRows = data.filter(r => parseFloat(r["QTY"]) > 0 && r.Ticker);
+        rawRows = data.filter(r => parseFloat(r['QTY']) > 0 && r.Ticker);
+
         portfolioData = data.map(row => {
-          const date = row["M"];
-          const portfolioValue = parseFloat(row["N"]) || 0;
+          const date = row['M'];
+          const portfolioValue = parseFloat(row['N']) || 0;
           if (!portfolioValue) return null;
           return { date, portfolioValue };
         }).filter(Boolean);
+
         renderCharts(false);
-        const toggle = document.getElementById("memberToggle");
-        if (toggle) toggle.addEventListener("change", e => renderCharts(e.target.checked));
+        document.getElementById('memberToggle')
+          .addEventListener('change', e => renderCharts(e.target.checked));
       },
-      error: err => console.error("CSV load error:", err)
+      error: err => console.error('CSV load error:', err)
     });
 
     function renderCharts(memberView) {
       const f = memberView ? 14 : 1;
-      const dashboard = document.getElementById("dashboard");
-      dashboard.innerHTML = "";
+      const dashboard = document.getElementById('dashboard');
+      dashboard.innerHTML = '';
 
       let totalSpent = 0, totalValue = 0;
       rawRows.forEach(r => {
-        const tcUsd = parseFloat(r["Total Cost"].replace(/[^\\d.-]/g,"")) || 0;
-        const mvUsd = parseFloat(r["Market Value"].replace(/[^\\d.-]/g,"")) || 0;
-        const mvNzd = parseFloat(r["NZD"].replace(/[^\\d.-]/g,"")) || 0;
+        const tcUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
+        const mvUsd   = parseFloat(r['Market Value'].replace(/[^\d.-]/g,'')) || 0;
+        const mvNzd   = parseFloat(r['NZD'].replace(/[^\d.-]/g,''))       || 0;
         const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
         totalSpent += costNzd;
         totalValue += mvNzd;
       });
       const totalProfit = totalValue - totalSpent;
 
-      const pieCard = document.createElement("div");
-      pieCard.className = "card";
+      // PIE card
+      const pieCard = document.createElement('div');
+      pieCard.className = 'chart-card';
       pieCard.innerHTML = `
-        <h2>Allocation ${memberView ? "(per member)" : ""}</h2>
-        <div class="chart"><canvas id="summaryPie"></canvas></div>
+        <h2>Allocation (NZD${memberView?' per member':''})</h2>
+        <div class="chart-container"><canvas id="summaryPie"></canvas></div>
       `;
       dashboard.appendChild(pieCard);
 
-      const barCard = document.createElement("div");
-      barCard.className = "card";
+      // BAR card
+      const barCard = document.createElement('div');
+      barCard.className = 'chart-card';
       barCard.innerHTML = `
-        <h2>Portfolio Summary ${memberView ? "(per member)" : ""}</h2>
-        <div class="chart"><canvas id="summaryBar"></canvas></div>
+        <h2>Portfolio Summary (NZD${memberView?' per member':''})</h2>
+        <div class="chart-container"><canvas id="summaryBar"></canvas></div>
       `;
       dashboard.appendChild(barCard);
 
-      const lineCard = document.createElement("div");
-      lineCard.className = "card";
+      // Portfolio Value Line chart
+      const lineCard = document.createElement('div');
+      lineCard.className = 'chart-card';
       lineCard.innerHTML = `
         <h2>Portfolio Value Over Time</h2>
-        <div class="chart"><canvas id="portfolioValueLine"></canvas></div>
+        <div class="chart-container"><canvas id="portfolioValueLine"></canvas></div>
       `;
       dashboard.appendChild(lineCard);
 
       const lineLabels = portfolioData.map(r => r.date);
       const lineData = portfolioData.map(r => r.portfolioValue);
+
       const minValue = Math.min(...lineData);
       const maxValue = Math.max(...lineData);
       const margin = (maxValue - minValue) * 0.1;
 
-      new Chart(document.getElementById("portfolioValueLine"), {
-        type: "line",
-        data: { labels: lineLabels, datasets: [{ label: "Portfolio Value (NZD)", data: lineData, fill: false, borderColor: "rgba(75,192,192,1)", tension: 0.1 }] },
+      new Chart(document.getElementById('portfolioValueLine'), {
+        type: 'line',
+        data: {
+          labels: lineLabels,
+          datasets: [{
+            label: 'Portfolio Value (NZD)',
+            data: lineData,
+            fill: false,
+            borderColor: 'rgba(75,192,192,1)',
+            tension: 0.1
+          }]
+        },
         options: {
-          responsive: true, maintainAspectRatio: false,
+          responsive: true,
+          maintainAspectRatio: false,
           scales: {
-            y: { min: minValue - margin, max: maxValue + margin, ticks: { callback: v => "$" + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) } },
-            x: { }
+            y: {
+              min: minValue - margin,
+              max: maxValue + margin,
+              ticks: {
+                callback: function(value) {
+                  return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2 });
+                }
+              },
+              grid: { color: '#444', borderColor: '#444' }
+            },
+            x: { grid: { color: '#444' } }
           },
-          plugins: { legend: { labels: { color: "#fff" } } }
+          plugins: {
+            legend: { labels: { color: '#fff' } }
+          }
         }
       });
 
+      // PIE chart
       const pieLabels = rawRows.map(r => r.Ticker);
-      const pieData = rawRows.map(r => (parseFloat(r["NZD"].replace(/[^\\d.-]/g,"")) || 0) / f);
-      new Chart(document.getElementById("summaryPie"), {
-        type: "doughnut",
+      const pieData = rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0) / f);
+      new Chart(document.getElementById('summaryPie'), {
+        type: 'doughnut',
         data: { labels: pieLabels, datasets: [{ data: pieData }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "right", labels: { color: "#fff" } } }, elements: { arc: { borderWidth: 0 } } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'right', labels: { color: '#fff' } } },
+          elements: { arc: { borderWidth: 0 } }
+        }
       });
 
-      new Chart(document.getElementById("summaryBar"), {
-        type: "bar",
-        data: { labels: ["Spent", "Profit", "Value"], datasets: [{ label: "NZD", data: [ totalSpent / f, totalProfit / f, totalValue / f ], backgroundColor: ["rgba(54,162,235,0.6)","rgba(255,205,86,0.6)","rgba(75,192,192,0.6)"] }] },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: v => "$" + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) } } }, plugins: { legend: { display: false } } }
+      // BAR chart
+      new Chart(document.getElementById('summaryBar'), {
+        type: 'bar',
+        data: {
+          labels: ['Spent', 'Profit', 'Value'],
+          datasets: [{
+            label: 'NZD',
+            data: [ totalSpent / f, totalProfit / f, totalValue / f ],
+            backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(255,205,86,0.6)', 'rgba(75,192,192,0.6)' ]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { callback: v => '$' + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) },
+              grid: { color: '#444', borderColor: '#444' }
+            },
+            x: { grid: { color: '#444' } }
+          },
+          plugins: { legend: { display: false } }
+        }
       });
 
+      // one card per holding
       rawRows.forEach(r => {
-        const tcUsd = parseFloat(r["Total Cost"].replace(/[^\\d.-]/g, "")) || 0;
-        const mvUsd = parseFloat(r["Market Value"].replace(/[^\\d.-]/g, "")) || 0;
-        const mvNzd = parseFloat(r["NZD"].replace(/[^\\d.-]/g, "")) || 0;
+        const tcUsd = parseFloat(r['Total Cost'].replace(/[^\d.-]/g, '')) || 0;
+        const mvUsd = parseFloat(r['Market Value'].replace(/[^\d.-]/g, '')) || 0;
+        const mvNzd = parseFloat(r['NZD'].replace(/[^\d.-]/g, '')) || 0;
+        const avgUsd = parseFloat(r['Average cost'].replace(/[^\d.-]/g, '')) || 0;
+        const priceUsd = parseFloat(r.Price.replace(/[^\d.-]/g, '')) || 0;
         const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
         const profitNzd = mvNzd - costNzd;
-        const pctChange = parseFloat(r["% Change"].replace(/[^\\d.-]/g, "")) || 0;
+        const pctChange = parseFloat(r['% Change'].replace(/[^\d.-]/g, '')) || 0;
 
-        const card = document.createElement("div");
-        card.className = "card";
-        card.style.border = `1px solid ${profitNzd >= 0 ? "rgba(34,197,94,.35)" : "rgba(239,68,68,.35)"} `;
+        const card = document.createElement('div');
+        card.className = 'chart-card';
         card.innerHTML = `
           <h2>${r.Ticker}</h2>
-          <div class="chart"><canvas id="chart-${r.Ticker}"></canvas></div>
+          <div class="chart-container">
+            <canvas id="chart-${r.Ticker}"></canvas>
+          </div>
         `;
-        dashboard.appendChild(card);
+        document.getElementById('dashboard').appendChild(card);
+
+        if (profitNzd >= 0) card.style.border = '3px solid #28a745';
+        else card.style.border = '3px solid #dc3545';
 
         new Chart(document.getElementById(`chart-${r.Ticker}`), {
           data: {
-            labels: ["Cost", "Value", "Profit", "% Change"],
+            labels: ['Cost', 'Value', 'Profit', '% Change'],
             datasets: [
-              { type: "bar", label: "NZD", data: [ costNzd / f, mvNzd / f, profitNzd / f, null ], backgroundColor: ["rgba(54,162,235,0.6)","rgba(75,192,192,0.6)","rgba(255,205,86,0.6)"] },
-              { type: "line", label: "% Change", data: [ null, null, null, pctChange ], yAxisID: "PCT", borderColor: "rgba(255,99,132,0.8)", backgroundColor: "rgba(255,99,132,0.4)", tension: .3, pointRadius: 4, fill: false }
+              {
+                type: 'bar',
+                label: 'NZD',
+                data: [ costNzd / f, mvNzd / f, profitNzd / f, null ],
+                backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(75,192,192,0.6)', 'rgba(255,205,86,0.6)' ]
+              },
+              {
+                type: 'line',
+                label: '% Change',
+                data: [ null, null, null, pctChange ],
+                yAxisID: 'PCT',
+                borderColor: 'rgba(255,99,132,0.8)',
+                backgroundColor: 'rgba(255,99,132,0.4)',
+                tension: 0.3,
+                pointRadius: 4,
+                fill: false
+              }
             ]
           },
-          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "NZD" }, ticks: { callback: v => "$" + v.toLocaleString() } }, PCT: { type: "linear", position: "right", title: { display: true, text: "% Change" }, grid: { drawOnChartArea: false }, ticks: { callback: v => v + "%" } } }, plugins: { legend: { position: "bottom" } } }
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: { beginAtZero: true, title: { display: true, text: 'NZD' }, ticks: { callback: v => '$' + v.toLocaleString() }, grid: { color: '#444' } },
+              PCT: { type: 'linear', position: 'right', title: { display: true, text: '% Change' }, grid: { drawOnChartArea: false }, ticks: { callback: v => v + '%' } }
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: ctx => {
+                    if (ctx.dataset.type === 'line') return `% Change: ${ctx.parsed.y}%`;
+                    return `NZD $${ctx.parsed.y.toLocaleString()}`;
+                  }
+                }
+              },
+              legend: { position: 'bottom' }
+            }
+          }
         });
       });
     }
