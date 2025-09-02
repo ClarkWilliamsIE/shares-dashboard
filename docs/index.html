@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Winnerland with Login and Polls</title>
+  <title>Winnerland</title>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -44,25 +44,20 @@
     .authbar button.primary { background: var(--blue); }
     .authbar button.google { background: #34a853; }
     .authbar button.danger { background: var(--red); }
-    .hint { font-size: .9rem; color: var(--muted); }
+    .pill { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .6rem; background: #2a2a2a; border-radius: 999px; font-size: .9rem; color: var(--muted); }
 
     .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 1rem; }
     .chart-card { background: var(--card); border-radius: 10px; box-shadow: var(--shadow); padding: 1rem; display: flex; flex-direction: column; border: var(--border); }
     .chart-card h2 { margin: 0 0 .5rem; font-size: 1.1rem; text-align: center; }
     .chart-container { position: relative; flex: 1; height: 200px; }
     .chart-container canvas { width: 100% !important; height: 100% !important; }
-
-    .banner { background: #242424; border: 1px solid #333; color: var(--text); padding: .75rem 1rem; border-radius: 10px; box-shadow: var(--shadow); }
-    .center { text-align: center; }
-    .poll-row { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; margin-top: .5rem; }
-    .pill { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .6rem; background: #2a2a2a; border-radius: 999px; font-size: .9rem; color: var(--muted); }
   </style>
 </head>
 
 <body>
   <h1>Winnerland</h1>
 
-  <!-- Top controls: Member toggle and Auth bar -->
+  <!-- Member view toggle and Login only -->
   <div class="topbar">
     <div class="center">
       <label class="switch">
@@ -74,11 +69,9 @@
 
     <div class="authbar" id="authBar">
       <span id="authStatus" class="pill">Not signed in</span>
-      <div class="pill" style="gap:.4rem">
-        <label style="display:inline-flex;align-items:center;gap:.4rem;cursor:pointer">
-          <input id="rememberChk" type="checkbox" checked> Stay signed in
-        </label>
-      </div>
+      <label class="pill" style="cursor:pointer">
+        <input id="rememberChk" type="checkbox" checked /> Stay signed in
+      </label>
       <div style="display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center">
         <input id="emailInput" type="email" placeholder="email" />
         <input id="passwordInput" type="password" placeholder="password" />
@@ -94,26 +87,13 @@
         <button id="setPwBtn">Set password</button>
       </div>
     </div>
-
-    <div id="setupBanner" class="banner" style="display:none">
-      <strong>Polls are not set up yet</strong>
-      <div class="hint">Run the SQL from our last message to create polls, options, and votes. Then refresh this page. You can still sign in now to test auth.</div>
-    </div>
   </div>
 
-  <!-- Polls area -->
-  <div id="pollsArea" class="dashboard"></div>
-
-  <!-- Watchlist -->
-  <div id="watchlistArea" class="dashboard"></div>
-
-  <!-- Your original dashboard -->
+  <!-- Original dashboard only -->
   <div class="dashboard" id="dashboard"></div>
 
   <script>
-    /* =============================
-       0. Supabase init and auth UI
-       ============================= */
+    // 0. Supabase init and simple auth UI
     const supabaseUrl = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
 
@@ -139,34 +119,24 @@
           if (row) row.style.display = 'flex';
         }
         updateAuthUI();
-        if (typeof renderWatchlist === 'function') renderWatchlist();
       });
     }
     attachAuthListener();
 
     async function updateAuthUI() {
       const { data: { user } } = await supabase.auth.getUser();
-      const status = document.getElementById("authStatus");
-      const emailInput = document.getElementById("emailInput");
-      const passwordInput = document.getElementById("passwordInput");
-      const signinBtn = document.getElementById("signinBtn");
-      const signupBtn = document.getElementById("signupBtn");
-      const magicBtn = document.getElementById("magicBtn");
-      const googleBtn = document.getElementById("googleBtn");
-      const forgotBtn = document.getElementById("forgotBtn");
-      const signOutBtn = document.getElementById("signOutBtn");
-      const setPwRow = document.getElementById("setPwRow");
-
+      const status = document.getElementById('authStatus');
+      const signOutBtn = document.getElementById('signOutBtn');
+      const setPwRow = document.getElementById('setPwRow');
       if (user) {
         status.textContent = `Signed in as ${user.email}`;
-        signOutBtn.style.display = "inline-block";
-        setPwRow.style.display = "flex"; // allow setting a password any time you are signed in
+        signOutBtn.style.display = 'inline-block';
+        setPwRow.style.display = 'flex';
       } else {
-        status.textContent = "Not signed in";
-        signOutBtn.style.display = "none";
-        setPwRow.style.display = "none";
+        status.textContent = 'Not signed in';
+        signOutBtn.style.display = 'none';
+        setPwRow.style.display = 'none';
       }
-      gatePollControls();
     }
 
     function persistFromUI() {
@@ -175,15 +145,16 @@
     }
 
     async function withClientForPersist(fn) {
-      // Create a fresh client using chosen persistence before starting the auth flow
       supabase = makeClient(persistFromUI());
       attachAuthListener();
       return await fn();
     }
 
-    // Email, password sign in
     document.addEventListener('click', (e) => {
-      if (e.target && e.target.id === 'signinBtn') {
+      const id = e.target && e.target.id;
+      if (!id) return;
+
+      if (id === 'signinBtn') {
         withClientForPersist(async () => {
           const email = document.getElementById('emailInput').value.trim();
           const password = document.getElementById('passwordInput').value;
@@ -192,7 +163,7 @@
           if (error) alert(error.message);
         });
       }
-      if (e.target && e.target.id === 'signupBtn') {
+      if (id === 'signupBtn') {
         withClientForPersist(async () => {
           const email = document.getElementById('emailInput').value.trim();
           const password = document.getElementById('passwordInput').value;
@@ -205,7 +176,7 @@
           if (error) alert(error.message); else alert('Check your email to confirm your account');
         });
       }
-      if (e.target && e.target.id === 'magicBtn') {
+      if (id === 'magicBtn') {
         withClientForPersist(async () => {
           const email = document.getElementById('emailInput').value.trim();
           if (!email) { alert('Enter your email'); return; }
@@ -213,13 +184,13 @@
           if (error) alert(error.message); else alert('Check your email for the magic link');
         });
       }
-      if (e.target && e.target.id === 'googleBtn') {
+      if (id === 'googleBtn') {
         withClientForPersist(async () => {
           const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
           if (error) alert(error.message);
         });
       }
-      if (e.target && e.target.id === 'forgotBtn') {
+      if (id === 'forgotBtn') {
         withClientForPersist(async () => {
           const email = document.getElementById('emailInput').value.trim();
           if (!email) { alert('Enter your email'); return; }
@@ -227,10 +198,10 @@
           if (error) alert(error.message); else alert('Check your email for a password reset link');
         });
       }
-      if (e.target && e.target.id === 'signOutBtn') {
+      if (id === 'signOutBtn') {
         (async () => { await supabase.auth.signOut(); updateAuthUI(); })();
       }
-      if (e.target && e.target.id === 'setPwBtn') {
+      if (id === 'setPwBtn') {
         (async () => {
           const newPw = document.getElementById('newPw').value;
           if (!newPw) { alert('Enter a new password'); return; }
@@ -242,9 +213,7 @@
 
     updateAuthUI();
 
-    /* =============================
-       1. Your existing chart page
-       ============================= */
+    // 1. Original charts only
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
     let rawRows = [];
     let portfolioData = [];
@@ -261,9 +230,8 @@
           return { date, portfolioValue };
         }).filter(Boolean);
         renderCharts(false);
-        document.getElementById('memberToggle').addEventListener('change', e => renderCharts(e.target.checked));
-        renderPolls();
-        renderWatchlist();
+        const toggle = document.getElementById('memberToggle');
+        if (toggle) toggle.addEventListener('change', e => renderCharts(e.target.checked));
       },
       error: err => console.error('CSV load error:', err)
     });
@@ -273,7 +241,6 @@
       const dashboard = document.getElementById('dashboard');
       dashboard.innerHTML = '';
 
-      // totals
       let totalSpent = 0, totalValue = 0;
       rawRows.forEach(r => {
         const tcUsd   = parseFloat(r['Total Cost'].replace(/[^\d.-]/g,'')) || 0;
@@ -285,7 +252,6 @@
       });
       const totalProfit = totalValue - totalSpent;
 
-      // PIE card
       const pieCard = document.createElement('div');
       pieCard.className = 'chart-card';
       pieCard.innerHTML = `
@@ -294,7 +260,6 @@
       `;
       dashboard.appendChild(pieCard);
 
-      // BAR card
       const barCard = document.createElement('div');
       barCard.className = 'chart-card';
       barCard.innerHTML = `
@@ -303,7 +268,6 @@
       `;
       dashboard.appendChild(barCard);
 
-      // Line card
       const lineCard = document.createElement('div');
       lineCard.className = 'chart-card';
       lineCard.innerHTML = `
@@ -331,7 +295,6 @@
         }
       });
 
-      // PIE chart
       const pieLabels = rawRows.map(r => r.Ticker);
       const pieData = rawRows.map(r => (parseFloat(r['NZD'].replace(/[^\d.-]/g,'')) || 0) / f);
       new Chart(document.getElementById('summaryPie'), {
@@ -340,14 +303,12 @@
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#fff' } } }, elements: { arc: { borderWidth: 0 } } }
       });
 
-      // BAR chart
       new Chart(document.getElementById('summaryBar'), {
         type: 'bar',
         data: { labels: ['Spent', 'Profit', 'Value'], datasets: [{ label: 'NZD', data: [ totalSpent / f, totalProfit / f, totalValue / f ], backgroundColor: ['rgba(54,162,235,0.6)','rgba(255,205,86,0.6)','rgba(75,192,192,0.6)'] }] },
         options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) }, grid: { color: '#444', borderColor: '#444' } }, x: { grid: { color: '#444' } } }, plugins: { legend: { display: false } } }
       });
 
-      // one card per holding
       rawRows.forEach(r => {
         const tcUsd = parseFloat(r['Total Cost'].replace(/[^\d.-]/g, '')) || 0;
         const mvUsd = parseFloat(r['Market Value'].replace(/[^\d.-]/g, '')) || 0;
@@ -377,157 +338,8 @@
         });
       });
     }
-    /* =============================
-       2. Watchlist (add and second)
-     ============================= */
-    const VOTE_THRESHOLD = 6; // required seconds to confirm
-    const SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/PASTE_DEPLOYMENT_ID/exec"; // paste your Apps Script Web App URL here
-    const SHEETS_SECRET = "winnerland"; // shared secret, must match your Apps Script SHARED_SECRET
-
-    async function getUserSecondsMap() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return new Set();
-      const { data } = await supabase
-        .from('watch_seconds')
-        .select('watch_id')
-        .eq('user_id', user.id);
-      return new Set((data || []).map(r => r.watch_id));
-    }
-
-    async function renderWatchlist() {
-      const area = document.getElementById('watchlistArea');
-      if (!area) return;
-      area.innerHTML = '';
-
-      // Add form card
-      const formCard = document.createElement('div');
-      formCard.className = 'chart-card';
-      formCard.innerHTML = `
-        <h2>Watchlist</h2>
-        <div class="hint center">Any signed in member can add a ticker. Others can second it. When seconds reach ${VOTE_THRESHOLD}, the item is confirmed.</div>
-        <form id="addWatchForm" class="poll-row" autocomplete="off">
-          <input id="wlTicker" placeholder="Ticker (for example, AAPL)" style="padding:.5rem;border-radius:8px;border:1px solid #333;background:#1e1e1e;color:#fff;min-width:200px" />
-          <input id="wlNote" placeholder="Note (optional)" style="padding:.5rem;border-radius:8px;border:1px solid #333;background:#1e1e1e;color:#fff;min-width:250px" />
-          <button class="primary" type="submit">Add to watchlist</button>
-        </form>
-        <div class="hint center" id="wlHint"></div>
-      `;
-      area.appendChild(formCard);
-
-      // Disable form for guests
-      const wlHint = formCard.querySelector('#wlHint');
-      if (!isAuthed()) {
-        formCard.querySelector('button').disabled = true;
-        wlHint.textContent = 'Sign in to add items.';
-      } else {
-        wlHint.textContent = '';
-      }
-
-      // Handle submit
-      formCard.querySelector('#addWatchForm').addEventListener('submit', async e => {
-        e.preventDefault();
-        const ticker = String(formCard.querySelector('#wlTicker').value || '').trim().toUpperCase();
-        const note = String(formCard.querySelector('#wlNote').value || '').trim();
-        if (!ticker) { alert('Enter a ticker'); return; }
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { alert('Please sign in'); return; }
-        try {
-          const existing = await supabase.from('watchlist').select('id').ilike('ticker', ticker).limit(1);
-          if (existing && existing.data && existing.data.length) { alert('Already on the watchlist'); return; }
-          const { data, error } = await supabase.from('watchlist').insert({ ticker, note, added_by: user.id }).select('*').single();
-          if (error) throw error;
-          syncToSheets({ action: 'add', ticker, added_by_email: user.email, added_at: new Date().toISOString(), watch_id: data.id });
-          renderWatchlist();
-        } catch (e2) {
-          const msg = String(e2.message || e2);
-          if (msg.toLowerCase().includes('duplicate')) alert('Already on the watchlist');
-          else alert(msg);
-        }
-      });
-        const ticker = String(formCard.querySelector('#wlTicker').value || '').trim().toUpperCase();
-        const note = String(formCard.querySelector('#wlNote').value || '').trim();
-        if (!ticker) { alert('Enter a ticker'); return; }
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { alert('Please sign in'); return; }
-        const { data, error } = await supabase
-          .from('watchlist')
-          .insert({ ticker, note, added_by: user.id })
-          .select('*')
-          .single();
-        if (error) { alert(error.message); return; }
-        // optional sync to Google Sheets
-        syncToSheets({ action: 'add', ticker, added_by_email: user.email, added_at: new Date().toISOString(), watch_id: data.id });
-        renderWatchlist();
-      });
-
-      // Fetch items and the user's seconds
-      const [itemsRes, mySecondsSet] = await Promise.all([
-        supabase.from('watchlist_with_counts').select('*').order('created_at', { ascending: false }),
-        getUserSecondsMap()
-      ]);
-      const items = itemsRes.data || [];
-
-      // Render each watch item
-      for (const item of items) {
-        const card = document.createElement('div');
-        card.className = 'chart-card';
-        const confirmed = Number(item.seconds_count || 0) >= VOTE_THRESHOLD || item.confirmed === true;
-        card.style.border = confirmed ? '3px solid var(--green)' : '3px solid transparent';
-        const youSeconded = mySecondsSet.has(item.id);
-        card.innerHTML = `
-          <h2>${item.ticker}${confirmed ? ' (Confirmed)' : ''}</h2>
-          <div class="hint center">Added ${new Date(item.created_at).toLocaleString()}${item.added_by_email ? ` by ${item.added_by_email}` : ''}${item.note ? `, ${item.note}` : ''}</div>
-          <div class="center" style="margin-top:.5rem">${item.seconds_count || 0} of ${VOTE_THRESHOLD} seconds</div>
-          <div class="poll-row">
-            <button data-second-btn data-id="${item.id}" ${confirmed || youSeconded ? 'disabled' : ''} class="primary">${youSeconded ? 'You seconded' : confirmed ? 'Confirmed' : 'Second this'}</button>
-            
-          </div>
-        `;
-        area.appendChild(card);
-      }
-
-      // Wire up second buttons and copy
-      area.addEventListener('click', async e => {
-        const secBtn = e.target.closest('[data-second-btn]');
-        if (secBtn) {
-          const id = secBtn.getAttribute('data-id');
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) { alert('Please sign in'); return; }
-          const { error } = await supabase.from('watch_seconds').insert({ watch_id: id, user_id: user.id });
-          if (error) {
-            if ((error.message || '').toLowerCase().includes('duplicate')) alert('You already seconded this');
-            else alert(error.message);
-          } else {
-            // optional sync to Sheets for seconds
-            syncToSheets({ action: 'second', watch_id: id });
-          }
-          renderWatchlist();
-        }
-      });
-    }
-
-    async function syncToSheets(payload) {
-      if (!SHEETS_WEBHOOK_URL) { console.info('Sheets sync skipped, set SHEETS_WEBHOOK_URL to enable. Payload:', payload); return; }
-      try {
-        const body = { ...payload, secret: SHEETS_SECRET };
-        await fetch(SHEETS_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-      } catch (e) {
-        console.warn('Sheets sync failed', e);
-      }
-    }
-      try {
-        const headers = { 'Content-Type': 'application/json' };
-        if (SHEETS_SECRET) headers['X-Secret'] = SHEETS_SECRET;
-        await fetch(SHEETS_WEBHOOK_URL, { method: 'POST', headers, body: JSON.stringify(payload) });
-      } catch (e) {
-        console.warn('Sheets sync failed', e);
-      }
-    }
   </script>
 </body>
 </html>
+
 
