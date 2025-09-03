@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Winnerland - Login Trial</title>
+  <title>Winnerland, Login Trial</title>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,9 +13,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    :root {
-      color-scheme: dark;
-    }
+    :root { color-scheme: dark; }
     body {
       margin: 0;
       padding: 1rem;
@@ -23,12 +21,9 @@
       background: #121212;
       color: #fff;
     }
-    h1 {
-      text-align: center;
-      margin-bottom: 0.5rem;
-      color: #fff;
-    }
-    /* switch styling */
+    h1 { text-align: center; margin-bottom: 0.5rem; color: #fff; }
+
+    /* switch */
     .switch { position: relative; display: inline-block; width: 50px; height: 26px; margin-right: 0.5rem; vertical-align: middle; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider { position: absolute; cursor: pointer; inset: 0; background-color: #3a3a3a; transition: .2s; border-radius: 26px; }
@@ -73,18 +68,18 @@
 
   <!-- Auth controls -->
   <div class="auth" id="authControls">
-    <input id="email" type="email" placeholder="email@example.com" />
-    <input id="password" type="password" placeholder="password" />
+    <input id="email" type="email" placeholder="email@example.com" autocomplete="username" />
+    <input id="password" type="password" placeholder="password" autocomplete="current-password" />
     <button id="btnSignUp" class="btn">Sign up</button>
     <button id="btnSignIn" class="btn">Login</button>
     <button id="btnSignOut" class="btn" style="display:none;">Sign out</button>
   </div>
 
-  <!-- Member only area example, read only for now -->
+  <!-- Member only area example -->
   <div id="proFeatures" class="gate" style="display:none;">
     <div class="chart-card">
       <h2>Member tools</h2>
-      <p class="muted" style="text-align:center;">You are signed in. You can unlock interactive features here later.</p>
+      <p class="muted" style="text-align:center;">You are signed in. Interactive features will appear here.</p>
     </div>
   </div>
 
@@ -94,11 +89,12 @@
     // ---------- Supabase setup ----------
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
+
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
 
-    // ---------- Element refs ----------
+    // ---------- Elements ----------
     const authStatus = document.getElementById('authStatus');
     const btnSignUp = document.getElementById('btnSignUp');
     const btnSignIn = document.getElementById('btnSignIn');
@@ -107,6 +103,16 @@
     const passEl = document.getElementById('password');
     const proFeatures = document.getElementById('proFeatures');
     const memberToggle = document.getElementById('memberToggle');
+    const dashboard = document.getElementById('dashboard');
+
+    // ---------- Helpers ----------
+    function currentPageUrl() {
+      // Always return the exact file path that exists on Pages
+      // Handles both repo pages and user pages
+      const url = new URL(window.location.href);
+      // Keep pathname as is, includes /repo/ if present, and /index.html if that is how you opened it
+      return url.origin + url.pathname;
+    }
 
     async function refreshAuthUI() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -120,26 +126,60 @@
       proFeatures.style.display = signedIn ? 'block' : 'none';
     }
 
-    supabase.auth.onAuthStateChange(() => { refreshAuthUI(); });
+    // Clean the URL hash that contains access token bits after Supabase processes it
+    function cleanAuthHashOnce() {
+      if (window.location.hash && window.location.hash.includes("access_token")) {
+        history.replaceState({}, document.title, window.location.pathname + window.location.search);
+      }
+    }
 
+    supabase.auth.onAuthStateChange((_event, _session) => {
+      refreshAuthUI();
+      cleanAuthHashOnce();
+    });
+
+    function setBusy(busy) {
+      [btnSignUp, btnSignIn, btnSignOut].forEach(b => b.disabled = busy);
+      emailEl.disabled = busy && btnSignUp.style.display !== 'none';
+      passEl.disabled = busy && btnSignUp.style.display !== 'none';
+    }
+
+    // ---------- Auth actions ----------
     btnSignUp.addEventListener('click', async () => {
       const email = emailEl.value.trim();
       const password = passEl.value;
       if (!email || !password) { alert('Enter email and password'); return; }
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) alert(error.message); else alert('Check your email for a confirmation link');
+
+      setBusy(true);
+      const emailRedirectTo = currentPageUrl(); // key change, return to the exact file that exists
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo }
+      });
+      setBusy(false);
+
+      if (error) {
+        alert(error.message); // will say user already registered if reused
+      } else {
+        alert('Check your email for a confirmation link');
+      }
     });
 
     btnSignIn.addEventListener('click', async () => {
       const email = emailEl.value.trim();
       const password = passEl.value;
       if (!email || !password) { alert('Enter email and password'); return; }
+      setBusy(true);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
+      setBusy(false);
       if (error) alert(error.message);
     });
 
     btnSignOut.addEventListener('click', async () => {
+      setBusy(true);
       await supabase.auth.signOut();
+      setBusy(false);
     });
 
     // Gate the Member view toggle
@@ -177,7 +217,6 @@
 
     function renderCharts(memberView) {
       const f = memberView ? 14 : 1;
-      const dashboard = document.getElementById('dashboard');
       dashboard.innerHTML = '';
 
       // Totals
@@ -276,7 +315,7 @@
         }
       });
 
-      // cards for each holding
+      // Cards per holding
       rawRows.forEach(r => {
         const tcUsd = parseFloat((r['Total Cost'] || '').replace(/[^\d.-]/g, '')) || 0;
         const mvUsd = parseFloat((r['Market Value'] || '').replace(/[^\d.-]/g, '')) || 0;
@@ -292,9 +331,9 @@
           <div class="chart-container"><canvas id="chart-${r.Ticker}"></canvas></div>
         `;
         card.style.border = profitNzd >= 0 ? '3px solid #28a745' : '3px solid #dc3545';
-        document.getElementById('dashboard').appendChild(card);
+        dashboard.appendChild(card);
 
-        new Chart(document.getElementById(`chart-${r.Ticker}`), {
+        new Chart(document.getElementById(\`chart-${r.Ticker}\`), {
           data: {
             labels: ['Cost', 'Value', 'Profit', '% Change'],
             datasets: [
@@ -318,9 +357,11 @@
       });
     }
 
-    // First paint
+    // ---------- First paint ----------
     refreshAuthUI();
+    cleanAuthHashOnce();
   </script>
 </body>
 </html>
+
 
