@@ -190,6 +190,28 @@
       const email = suEmailEl.value.trim();
       const password = suPassEl.value;
       if (!email || !password) { alert('Enter email and password'); return; }
+
+      const { error } = await supabasePersist.auth.signUp({ email, password });
+      if (error) {
+        // Supabase enforces one account per email. Status 422 when already registered.
+        if (error.status === 422 || (error.message && error.message.toLowerCase().includes('already'))) {
+          const resend = confirm('That email is already registered. Resend the confirmation email now?');
+          if (resend) {
+            const { error: resendError } = await supabasePersist.auth.resend({ type: 'signup', email });
+            if (resendError) { alert(resendError.message); } else { alert('Confirmation email sent'); }
+          }
+        } else {
+          alert(error.message);
+        }
+        return;
+      }
+
+      signupDialog.close();
+      alert('Check your email for a confirmation link');
+    });
+      const email = suEmailEl.value.trim();
+      const password = suPassEl.value;
+      if (!email || !password) { alert('Enter email and password'); return; }
       const { error } = await supabasePersist.auth.signUp({ email, password });
       if (error) { alert(error.message); return; }
       signupDialog.close();
@@ -199,6 +221,23 @@
     // Login picks persistent or ephemeral based on Stay signed in
     btnSignIn.addEventListener('click', async () => {
       const email = emailEl.value.trim();
+      const password = passEl.value;
+      if (!email || !password) { alert('Enter email and password'); return; }
+      supabase = stayEl.checked ? supabasePersist : supabaseEphemeral;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        if (error.message && error.message.toLowerCase().includes('confirm')) {
+          const resend = confirm('Your email is not confirmed. Resend the confirmation email now?');
+          if (resend) {
+            const { error: resendError } = await supabasePersist.auth.resend({ type: 'signup', email });
+            if (resendError) { alert(resendError.message); } else { alert('Confirmation email sent'); }
+          }
+        } else {
+          alert(error.message);
+        }
+        return;
+      }
+    });
       const password = passEl.value;
       if (!email || !password) { alert('Enter email and password'); return; }
       supabase = stayEl.checked ? supabasePersist : supabaseEphemeral;
