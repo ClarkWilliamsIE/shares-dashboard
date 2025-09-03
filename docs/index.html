@@ -46,10 +46,13 @@
     .chart-container { position: relative; flex: 1; height: 200px; }
     .chart-container canvas { width: 100% !important; height: 100% !important; }
 
-    .gate { max-width: 960px; margin: 1rem auto; }
+    .gate { max-width: 1024px; margin: 1rem auto; }
 
     /* tiny logger */
     #log { max-width: 1024px; margin: 1rem auto; background: #0f0f0f; border: 1px solid #333; padding: 0.5rem 0.75rem; border-radius: 8px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    #watchlistTable th, #watchlistTable td { border-bottom: 1px solid #2a2a2a; }
+    #watchlistTable tr:hover { background: #161616; }
+    .pill { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; background: #222; border: 1px solid #333; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -82,7 +85,39 @@
   <div id="proFeatures" class="gate" style="display:none;">
     <div class="chart-card">
       <h2>Member tools</h2>
-      <p class="muted" style="text-align:center;">You are signed in. Interactive features will appear here.</p>
+      <p class="muted" style="text-align:center;">You are signed in, interactive features will appear here.</p>
+    </div>
+  </div>
+
+  <!-- Watchlist card -->
+  <div id="watchlistCard" class="gate">
+    <div class="chart-card">
+      <h2>Shared watchlist</h2>
+
+      <!-- add form, hidden until signed in -->
+      <form id="watchlistForm" class="auth" style="grid-template-columns: repeat(5, max-content); display:none; margin-bottom: 0.5rem;">
+        <input id="wlTicker" type="text" placeholder="Ticker, for example AAPL" inputmode="latin" />
+        <input id="wlCost" type="number" step="0.0001" min="0" placeholder="Cost price, for example 123.45" />
+        <button id="wlAdd" type="submit" class="btn">Add to watchlist</button>
+        <span id="wlHint" class="muted" style="align-self:center;">Signed in can add, everyone can view</span>
+      </form>
+
+      <div id="watchlistTableWrap" style="overflow:auto;">
+        <table id="watchlistTable" style="width:100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding:6px;">Ticker</th>
+              <th style="text-align:right; padding:6px;">Cost price</th>
+              <th style="text-align:left; padding:6px;">Added by</th>
+              <th style="text-align:left; padding:6px;">When</th>
+              <th style="text-align:left; padding:6px;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="watchlistBody">
+            <tr><td colspan="5" class="muted" style="padding:8px;">Loading watchlist...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -227,17 +262,13 @@
     }
 
     function buildPortfolioFromHeaders(rows) {
-      // Try known headers first
       let dateKey = null, valueKey = null;
       const headers = rows.length ? Object.keys(rows[0]) : [];
-      // Preferred keys
       const datePrefs = ['Date','date','M'];
       const valuePrefs = ['Portfolio Value','portfolio value','Value','N'];
       for (const k of datePrefs) if (headers.includes(k)) { dateKey = k; break; }
       for (const k of valuePrefs) if (headers.includes(k)) { valueKey = k; break; }
-
       if (!dateKey || !valueKey) return [];
-
       return rows.map(r => {
         const date = r[dateKey];
         const v = numFromCell(r[valueKey]);
@@ -250,15 +281,14 @@
       const needDemo = portfolioData.length === 0 && rawRows.length === 0;
       if (!needDemo) return;
       logLine("CSV looked empty or mismatched, using demo data so charts show");
-      // Simple demo rows
       rawRows = [
         { Ticker: 'AAPL', 'Total Cost': '1000', 'Market Value': '1200', 'NZD': '2000', '% Change': '20', QTY: '1' },
-        { Ticker: 'MSFT', 'Total Cost': '800', 'Market Value': '900', 'NZD': '1500', '% Change': '12.5', QTY: '1' },
+        { Ticker: 'MSFT', 'Total Cost': '800', 'Market Value': '900', 'NZD': '1500', '% Change': '12.5', QTY: '1' }
       ];
       portfolioData = [
         { date: '2025-07', portfolioValue: 2600 },
         { date: '2025-08', portfolioValue: 2950 },
-        { date: '2025-09', portfolioValue: 3100 },
+        { date: '2025-09', portfolioValue: 3100 }
       ];
     }
 
@@ -271,12 +301,8 @@
         complete: ({ data }) => {
           try {
             const rows = Array.isArray(data) ? data : [];
-            // holdings table, needs QTY and Ticker
             rawRows = rows.filter(r => numFromCell(r['QTY']) > 0 && r['Ticker']);
-
-            // time series table
             portfolioData = buildPortfolioFromHeaders(rows);
-
             ensureDemoWhenEmpty();
             logLine("CSV parsed, holdings " + rawRows.length + ", points " + portfolioData.length);
             renderCharts(false);
@@ -337,7 +363,7 @@
       `;
       dashboard.appendChild(lineCard);
 
-      // Safe y bounds
+      // Line chart
       const lineLabels = portfolioData.map(r => r.date);
       const lineVals = portfolioData.map(r => r.portfolioValue);
       if (lineVals.length === 0) {
@@ -346,7 +372,6 @@
         const minValue = Math.min.apply(null, lineVals);
         const maxValue = Math.max.apply(null, lineVals);
         const margin = Math.max(1, (maxValue - minValue) * 0.1);
-
         try {
           new Chart(document.getElementById('portfolioValueLine'), {
             type: 'line',
@@ -450,12 +475,127 @@
       });
     }
 
+    /* ----------------------- Watchlist feature ----------------------- */
+    const wlForm = document.getElementById('watchlistForm');
+    const wlTicker = document.getElementById('wlTicker');
+    const wlCost = document.getElementById('wlCost');
+    const wlAddBtn = document.getElementById('wlAdd');
+    const wlBody = document.getElementById('watchlistBody');
+    let currentUser = null;
+
+    async function loadWatchlist() {
+      const { data, error } = await supabase
+        .from('watchlist')
+        .select('id, created_at, ticker, cost_price, added_by, added_by_email')
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (error) {
+        wlBody.innerHTML = `<tr><td colspan="5" class="muted" style="padding:8px;">Could not load watchlist (likely the table or policies are not set yet)</td></tr>`;
+        logLine("Watchlist load error, " + error.message);
+        return;
+      }
+      renderWatchlist(data || []);
+    }
+
+    function renderWatchlist(rows) {
+      if (!rows.length) {
+        wlBody.innerHTML = `<tr><td colspan="5" class="muted" style="padding:8px;">No items yet</td></tr>`;
+        return;
+      }
+      wlBody.innerHTML = rows.map(r => {
+        const canDelete = currentUser && currentUser.id === r.added_by;
+        const who = r.added_by_email || 'member';
+        const when = new Date(r.created_at).toLocaleString();
+        const price = Number(r.cost_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+        const delBtn = canDelete
+          ? `<button class="btn" data-del="${r.id}" style="padding:0.25rem 0.5rem;">Delete</button>`
+          : `<span class="pill">View</span>`;
+        return `
+          <tr>
+            <td style="padding:6px;">${r.ticker}</td>
+            <td style="padding:6px; text-align:right;">$${price}</td>
+            <td style="padding:6px;">${who}</td>
+            <td style="padding:6px;">${when}</td>
+            <td style="padding:6px;">${delBtn}</td>
+          </tr>
+        `;
+      }).join('');
+
+      wlBody.querySelectorAll('[data-del]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-del');
+          btn.disabled = true;
+          const { error } = await supabase.from('watchlist').delete().eq('id', id);
+          if (error) {
+            alert(error.message);
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    async function addWatchlistItem(evt) {
+      evt.preventDefault();
+      if (!currentUser) {
+        alert('Please sign in to add items');
+        return;
+      }
+      const rawTicker = wlTicker.value.trim().toUpperCase();
+      const rawCost = wlCost.value.trim();
+      const cost = Number(rawCost);
+
+      if (!rawTicker) { alert('Enter a ticker'); return; }
+      if (!isFinite(cost) || cost <= 0) { alert('Enter a valid cost price'); return; }
+
+      wlAddBtn.disabled = true;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const addedEmail = sessionData && sessionData.session && sessionData.session.user && sessionData.session.user.email;
+
+      const { error } = await supabase.from('watchlist').insert({
+        ticker: rawTicker,
+        cost_price: cost,
+        added_by: currentUser.id,
+        added_by_email: addedEmail || null
+      });
+
+      wlAddBtn.disabled = false;
+      if (error) {
+        alert(error.message);
+        logLine("Add watchlist error, " + error.message);
+        return;
+      }
+      wlTicker.value = '';
+      wlCost.value = '';
+      // Realtime will refresh the table
+    }
+
+    wlForm.addEventListener('submit', addWatchlistItem);
+
+    const wlChannel = supabase
+      .channel('public:watchlist')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist' }, payload => {
+        logLine('Watchlist change, ' + payload.eventType);
+        loadWatchlist();
+      })
+      .subscribe();
+
+    // Hook into auth UI to toggle the add form
+    const originalRefreshAuthUI = refreshAuthUI;
+    refreshAuthUI = async function wrappedRefresh() {
+      await originalRefreshAuthUI();
+      const { data: { session } } = await supabase.auth.getSession();
+      currentUser = session ? session.user : null;
+      wlForm.style.display = currentUser ? 'grid' : 'none';
+    };
+
     /* ----------------------- First paint ----------------------- */
     (async function init() {
       try {
         await refreshAuthUI();
         cleanAuthHashOnce();
         loadCsv();
+        loadWatchlist();
         logLine("Init done");
       } catch (e) {
         logLine("Init error, " + e.message);
