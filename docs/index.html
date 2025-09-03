@@ -52,6 +52,10 @@
     .chart-container canvas { width: 100% !important; height: 100% !important; }
 
     .gate { max-width: 960px; margin: 1rem auto; }
+      /* dialog styling */
+    dialog { background:#1e1e1e; color:#fff; border:1px solid #333; border-radius:10px; padding:1rem; max-width:420px; }
+    dialog input { width:100%; box-sizing:border-box; margin:.4rem 0; padding:.5rem; background:#161616; border:1px solid #333; color:#fff; border-radius:6px; }
+    dialog .row { display:flex; gap:.5rem; justify-content:flex-end; margin-top:.5rem; }
   </style>
 </head>
 <body>
@@ -72,16 +76,33 @@
   </div>
 
   <!-- Auth controls -->
-  <div class="auth" id="authControls">
-    <input id="email" type="email" placeholder="email@example.com" />
-    <input id="password" type="password" placeholder="password" />
-    <button id="btnSignUp" class="btn">Sign up</button>
-    <button id="btnSignIn" class="btn">Login</button>
-    <button id="btnSignOut" class="btn" style="display:none;">Sign out</button>
+  <div class=\"auth\" id=\"authControls\">
+    <input id=\"email\" type=\"email\" placeholder=\"email@example.com\" />
+    <input id=\"password\" type=\"password\" placeholder=\"password\" />
+    <label class=\"stack\" style=\"grid-column: span 2; align-items:center;\">
+      <input id=\"staySignedIn\" type=\"checkbox\" checked />
+      <span class=\"muted\">Stay signed in</span>
+    </label>
+    <button id=\"btnSignIn\" class=\"btn\">Login</button>
+    <button id=\"btnSignOut\" class=\"btn\" style=\"display:none;\">Sign out</button>
+    <button id=\"btnShowSignUp\" class=\"btn\" style=\"grid-column: span 2; background:#203320; border-color:#2f5f2f;\">Create account</button>
   </div>
 
   <!-- Member only area example, read only for now -->
-  <div id="proFeatures" class="gate" style="display:none;">
+  <dialog id=\"signupDialog\">
+    <form method=\"dialog\" id=\"signupForm\">
+      <h3 style=\"margin:0 0 .5rem;\">Create account</h3>
+      <p class=\"muted\" style=\"margin:.25rem 0 .5rem;\">Use your email and a strong password. You can close this dialog to cancel.</p>
+      <input id=\"suEmail\" type=\"email\" placeholder=\"email@example.com\" />
+      <input id=\"suPassword\" type=\"password\" placeholder=\"password\" />
+      <div class=\"row\">
+        <button id=\"btnSignUpModal\" class=\"btn\">Sign up</button>
+        <button class=\"btn\" value=\"cancel\">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id=\"proFeatures\" class=\"gate\" style="display:none;">
     <div class="chart-card">
       <h2>Member tools</h2>
       <p class="muted" style="text-align:center;">You are signed in. You can unlock interactive features here later.</p>
@@ -94,64 +115,114 @@
     // ---------- Supabase setup ----------
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+
+    // Storage for non persistent sessions
+    const _mem = {};
+    const memoryStorage = {
+      getItem: (k) => Object.prototype.hasOwnProperty.call(_mem, k) ? _mem[k] : null,
+      setItem: (k, v) => { _mem[k] = v; },
+      removeItem: (k) => { delete _mem[k]; }
+    };
+
+    const supabasePersist = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: window.localStorage }
     });
+    const supabaseEphemeral = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: memoryStorage }
+    });
+
+    // Current client pointer, default to persistent so returning users auto sign in
+    let supabase = supabasePersist;
 
     // ---------- Element refs ----------
     const authStatus = document.getElementById('authStatus');
-    const btnSignUp = document.getElementById('btnSignUp');
     const btnSignIn = document.getElementById('btnSignIn');
     const btnSignOut = document.getElementById('btnSignOut');
+    const btnShowSignUp = document.getElementById('btnShowSignUp');
     const emailEl = document.getElementById('email');
     const passEl = document.getElementById('password');
+    const stayEl = document.getElementById('staySignedIn');
     const proFeatures = document.getElementById('proFeatures');
     const memberToggle = document.getElementById('memberToggle');
 
+    // Sign up dialog elements
+    const signupDialog = document.getElementById('signupDialog');
+    const suEmailEl = document.getElementById('suEmail');
+    const suPassEl = document.getElementById('suPassword');
+    const btnSignUpModal = document.getElementById('btnSignUpModal');
+
+    async function syncActiveClient() {
+      const a = await supabasePersist.auth.getSession();
+      const b = await supabaseEphemeral.auth.getSession();
+      if (a.data.session) { supabase = supabasePersist; return a.data.session; }
+      if (b.data.session) { supabase = supabaseEphemeral; return b.data.session; }
+      supabase = supabasePersist; // default
+      return null;
+    }
+
     async function refreshAuthUI() {
-      const { data: { session } } = await supabase.auth.getSession();
-      const signedIn = !!(session && session.user);
+      const session = await syncActiveClient();
+      const signedIn = !!session;
       authStatus.textContent = signedIn ? `Signed in as ${session.user.email}` : 'Not signed in';
       btnSignOut.style.display = signedIn ? 'inline-block' : 'none';
       btnSignIn.style.display = signedIn ? 'none' : 'inline-block';
-      btnSignUp.style.display = signedIn ? 'none' : 'inline-block';
       emailEl.style.display = signedIn ? 'none' : 'inline-block';
       passEl.style.display = signedIn ? 'none' : 'inline-block';
+      stayEl.parentElement.style.display = signedIn ? 'none' : 'flex';
+      btnShowSignUp.style.display = signedIn ? 'none' : 'inline-block';
       proFeatures.style.display = signedIn ? 'block' : 'none';
     }
 
-    supabase.auth.onAuthStateChange(() => { refreshAuthUI(); });
+    // Listen on both clients
+    [supabasePersist, supabaseEphemeral].forEach(c => c.auth.onAuthStateChange(() => { refreshAuthUI(); }));
 
-    btnSignUp.addEventListener('click', async () => {
-      const email = emailEl.value.trim();
-      const password = passEl.value;
-      if (!email || !password) { alert('Enter email and password'); return; }
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) alert(error.message); else alert('Check your email for a confirmation link');
+    // Open the sign up dialog on request
+    btnShowSignUp.addEventListener('click', async () => {
+      const session = await syncActiveClient();
+      if (session) { alert('You are signed in already. Sign out first if you want to create a new account'); return; }
+      signupDialog.showModal();
+      suEmailEl.focus();
     });
 
+    // Handle sign up in the dialog, default to persistent accounts
+    btnSignUpModal.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = suEmailEl.value.trim();
+      const password = suPassEl.value;
+      if (!email || !password) { alert('Enter email and password'); return; }
+      const { error } = await supabasePersist.auth.signUp({ email, password });
+      if (error) { alert(error.message); return; }
+      signupDialog.close();
+      alert('Check your email for a confirmation link');
+    });
+
+    // Login picks persistent or ephemeral based on Stay signed in
     btnSignIn.addEventListener('click', async () => {
       const email = emailEl.value.trim();
       const password = passEl.value;
       if (!email || !password) { alert('Enter email and password'); return; }
+      supabase = stayEl.checked ? supabasePersist : supabaseEphemeral;
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) alert(error.message);
     });
 
+    // Sign out from both clients to be safe
     btnSignOut.addEventListener('click', async () => {
-      await supabase.auth.signOut();
+      await Promise.allSettled([
+        supabasePersist.auth.signOut(),
+        supabaseEphemeral.auth.signOut()
+      ]);
     });
 
     // Gate the Member view toggle
     memberToggle.addEventListener('change', async e => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        e.target.checked = false;
-        alert('Please sign in to use Member view');
-        return;
-      }
+      const session = await syncActiveClient();
+      if (!session) { e.target.checked = false; alert('Please sign in to use Member view'); return; }
       renderCharts(true);
     });
+
+    // Initial UI paint
+    refreshAuthUI();
 
     // ---------- Data and charts ----------
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
