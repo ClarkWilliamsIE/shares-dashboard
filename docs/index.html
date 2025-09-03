@@ -47,6 +47,9 @@
     .chart-container canvas { width: 100% !important; height: 100% !important; }
 
     .gate { max-width: 960px; margin: 1rem auto; }
+
+    /* tiny logger */
+    #log { max-width: 1024px; margin: 1rem auto; background: #0f0f0f; border: 1px solid #333; padding: 0.5rem 0.75rem; border-radius: 8px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -75,7 +78,7 @@
     <button id="btnSignOut" class="btn" style="display:none;">Sign out</button>
   </div>
 
-  <!-- Member only area example -->
+  <!-- Member only area -->
   <div id="proFeatures" class="gate" style="display:none;">
     <div class="chart-card">
       <h2>Member tools</h2>
@@ -83,10 +86,21 @@
     </div>
   </div>
 
+  <!-- Log panel -->
+  <div id="log">Status, loading...</div>
+
   <div class="dashboard" id="dashboard"></div>
 
   <script>
-    // ---------- Supabase setup ----------
+    /* ----------------------- tiny logger ----------------------- */
+    const logBox = document.getElementById('log');
+    function logLine(msg) {
+      console.log(msg);
+      if (logBox) logBox.textContent += "\\n" + msg;
+    }
+    logBox.textContent = "Status, booting app...";
+
+    /* ----------------------- Supabase setup ----------------------- */
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
 
@@ -94,7 +108,7 @@
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
 
-    // ---------- Elements ----------
+    /* ----------------------- Elements ----------------------- */
     const authStatus = document.getElementById('authStatus');
     const btnSignUp = document.getElementById('btnSignUp');
     const btnSignIn = document.getElementById('btnSignIn');
@@ -105,13 +119,10 @@
     const memberToggle = document.getElementById('memberToggle');
     const dashboard = document.getElementById('dashboard');
 
-    // ---------- Helpers ----------
+    /* ----------------------- Helpers ----------------------- */
     function currentPageUrl() {
-      // Always return the exact file path that exists on Pages
-      // Handles both repo pages and user pages
       const url = new URL(window.location.href);
-      // Keep pathname as is, includes /repo/ if present, and /index.html if that is how you opened it
-      return url.origin + url.pathname;
+      return url.origin + url.pathname; // exact file path or folder index
     }
 
     async function refreshAuthUI() {
@@ -126,10 +137,10 @@
       proFeatures.style.display = signedIn ? 'block' : 'none';
     }
 
-    // Clean the URL hash that contains access token bits after Supabase processes it
     function cleanAuthHashOnce() {
       if (window.location.hash && window.location.hash.includes("access_token")) {
         history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        logLine("Cleaned auth hash");
       }
     }
 
@@ -140,29 +151,30 @@
 
     function setBusy(busy) {
       [btnSignUp, btnSignIn, btnSignOut].forEach(b => b.disabled = busy);
-      emailEl.disabled = busy && btnSignUp.style.display !== 'none';
-      passEl.disabled = busy && btnSignUp.style.display !== 'none';
+      const hideCreds = btnSignUp.style.display === 'none';
+      emailEl.disabled = busy && !hideCreds;
+      passEl.disabled = busy && !hideCreds;
     }
 
-    // ---------- Auth actions ----------
+    /* ----------------------- Auth actions ----------------------- */
     btnSignUp.addEventListener('click', async () => {
       const email = emailEl.value.trim();
       const password = passEl.value;
       if (!email || !password) { alert('Enter email and password'); return; }
-
       setBusy(true);
-      const emailRedirectTo = currentPageUrl(); // key change, return to the exact file that exists
+      const emailRedirectTo = currentPageUrl();
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: { emailRedirectTo }
       });
       setBusy(false);
-
       if (error) {
-        alert(error.message); // will say user already registered if reused
+        alert(error.message);
+        logLine("Sign up error, " + error.message);
       } else {
         alert('Check your email for a confirmation link');
+        logLine("Sign up ok, awaiting email confirm");
       }
     });
 
@@ -173,16 +185,21 @@
       setBusy(true);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       setBusy(false);
-      if (error) alert(error.message);
+      if (error) {
+        alert(error.message);
+        logLine("Login error, " + error.message);
+      } else {
+        logLine("Login ok");
+      }
     });
 
     btnSignOut.addEventListener('click', async () => {
       setBusy(true);
       await supabase.auth.signOut();
       setBusy(false);
+      logLine("Signed out");
     });
 
-    // Gate the Member view toggle
     memberToggle.addEventListener('change', async e => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -193,27 +210,89 @@
       renderCharts(true);
     });
 
-    // ---------- Data and charts ----------
+    /* ----------------------- Data and charts ----------------------- */
+    // Make sure this CSV is published to the web, File, Share, Publish to the web
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
     let rawRows = [];
     let portfolioData = [];
 
-    Papa.parse(csvUrl, {
-      download: true,
-      header: true,
-      complete: ({ data }) => {
-        rawRows = data.filter(r => parseFloat(r['QTY']) > 0 && r.Ticker);
-        portfolioData = data.map(row => {
-          const date = row['M'];
-          const portfolioValue = parseFloat(row['N']) || 0;
-          if (!portfolioValue) return null;
-          return { date, portfolioValue };
-        }).filter(Boolean);
-        renderCharts(false);
-      },
-      error: err => console.error('CSV load error:', err)
-    });
+    function numFromCell(val) {
+      if (val == null) return 0;
+      return parseFloat(String(val).replace(/[^\d.-]/g,'')) || 0;
+    }
+
+    function safeTickerId(t) {
+      return String(t || 'TICKER').replace(/[^A-Za-z0-9_-]/g, '_');
+    }
+
+    function buildPortfolioFromHeaders(rows) {
+      // Try known headers first
+      let dateKey = null, valueKey = null;
+      const headers = rows.length ? Object.keys(rows[0]) : [];
+      // Preferred keys
+      const datePrefs = ['Date','date','M'];
+      const valuePrefs = ['Portfolio Value','portfolio value','Value','N'];
+      for (const k of datePrefs) if (headers.includes(k)) { dateKey = k; break; }
+      for (const k of valuePrefs) if (headers.includes(k)) { valueKey = k; break; }
+
+      if (!dateKey || !valueKey) return [];
+
+      return rows.map(r => {
+        const date = r[dateKey];
+        const v = numFromCell(r[valueKey]);
+        if (!date || !isFinite(v) || v <= 0) return null;
+        return { date, portfolioValue: v };
+      }).filter(Boolean);
+    }
+
+    function ensureDemoWhenEmpty() {
+      const needDemo = portfolioData.length === 0 && rawRows.length === 0;
+      if (!needDemo) return;
+      logLine("CSV looked empty or mismatched, using demo data so charts show");
+      // Simple demo rows
+      rawRows = [
+        { Ticker: 'AAPL', 'Total Cost': '1000', 'Market Value': '1200', 'NZD': '2000', '% Change': '20', QTY: '1' },
+        { Ticker: 'MSFT', 'Total Cost': '800', 'Market Value': '900', 'NZD': '1500', '% Change': '12.5', QTY: '1' },
+      ];
+      portfolioData = [
+        { date: '2025-07', portfolioValue: 2600 },
+        { date: '2025-08', portfolioValue: 2950 },
+        { date: '2025-09', portfolioValue: 3100 },
+      ];
+    }
+
+    function loadCsv() {
+      logLine("Loading CSV, " + csvUrl);
+      Papa.parse(csvUrl, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: ({ data }) => {
+          try {
+            const rows = Array.isArray(data) ? data : [];
+            // holdings table, needs QTY and Ticker
+            rawRows = rows.filter(r => numFromCell(r['QTY']) > 0 && r['Ticker']);
+
+            // time series table
+            portfolioData = buildPortfolioFromHeaders(rows);
+
+            ensureDemoWhenEmpty();
+            logLine("CSV parsed, holdings " + rawRows.length + ", points " + portfolioData.length);
+            renderCharts(false);
+          } catch (e) {
+            logLine("Parse error, " + e.message);
+            ensureDemoWhenEmpty();
+            renderCharts(false);
+          }
+        },
+        error: err => {
+          logLine("CSV load error, " + err);
+          ensureDemoWhenEmpty();
+          renderCharts(false);
+        }
+      });
+    }
 
     function renderCharts(memberView) {
       const f = memberView ? 14 : 1;
@@ -222,9 +301,9 @@
       // Totals
       let totalSpent = 0, totalValue = 0;
       rawRows.forEach(r => {
-        const tcUsd   = parseFloat((r['Total Cost'] || '').replace(/[^\d.-]/g,'')) || 0;
-        const mvUsd   = parseFloat((r['Market Value'] || '').replace(/[^\d.-]/g,'')) || 0;
-        const mvNzd   = parseFloat((r['NZD'] || '').replace(/[^\d.-]/g,''))       || 0;
+        const tcUsd   = numFromCell(r['Total Cost']);
+        const mvUsd   = numFromCell(r['Market Value']);
+        const mvNzd   = numFromCell(r['NZD']);
         const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
         totalSpent += costNzd;
         totalValue += mvNzd;
@@ -258,110 +337,131 @@
       `;
       dashboard.appendChild(lineCard);
 
+      // Safe y bounds
       const lineLabels = portfolioData.map(r => r.date);
       const lineVals = portfolioData.map(r => r.portfolioValue);
-      const minValue = Math.min(...lineVals);
-      const maxValue = Math.max(...lineVals);
-      const margin = (maxValue - minValue) * 0.1;
+      if (lineVals.length === 0) {
+        logLine("No time series data, skipping line chart");
+      } else {
+        const minValue = Math.min.apply(null, lineVals);
+        const maxValue = Math.max.apply(null, lineVals);
+        const margin = Math.max(1, (maxValue - minValue) * 0.1);
 
-      new Chart(document.getElementById('portfolioValueLine'), {
-        type: 'line',
-        data: { labels: lineLabels, datasets: [{ label: 'Portfolio Value (NZD)', data: lineVals, fill: false, borderColor: 'rgba(75,192,192,1)', tension: 0.1 }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              min: minValue - margin,
-              max: maxValue + margin,
-              ticks: { callback: v => '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 }) },
-              grid: { color: '#444', borderColor: '#444' }
-            },
-            x: { grid: { color: '#444' } }
-          },
-          plugins: { legend: { labels: { color: '#fff' } } }
-        }
-      });
+        try {
+          new Chart(document.getElementById('portfolioValueLine'), {
+            type: 'line',
+            data: { labels: lineLabels, datasets: [{ label: 'Portfolio Value (NZD)', data: lineVals, fill: false, borderColor: 'rgba(75,192,192,1)', tension: 0.1 }] },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: {
+                  min: minValue - margin,
+                  max: maxValue + margin,
+                  ticks: { callback: v => '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 }) },
+                  grid: { color: '#444', borderColor: '#444' }
+                },
+                x: { grid: { color: '#444' } }
+              },
+              plugins: { legend: { labels: { color: '#fff' } } }
+            }
+          });
+        } catch (e) { logLine("Line chart error, " + e.message); }
+      }
 
       // PIE chart
-      const pieLabels = rawRows.map(r => r.Ticker);
-      const pieData = rawRows.map(r => (parseFloat((r['NZD'] || '').replace(/[^\d.-]/g,'')) || 0) / f);
-      new Chart(document.getElementById('summaryPie'), {
-        type: 'doughnut',
-        data: { labels: pieLabels, datasets: [{ data: pieData }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { position: 'right', labels: { color: '#fff' } } },
-          elements: { arc: { borderWidth: 0 } }
-        }
-      });
+      const pieLabels = rawRows.length ? rawRows.map(r => r.Ticker) : ['None'];
+      const pieData = rawRows.length ? rawRows.map(r => numFromCell(r['NZD']) / f) : [1];
+      try {
+        new Chart(document.getElementById('summaryPie'), {
+          type: 'doughnut',
+          data: { labels: pieLabels, datasets: [{ data: pieData }] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { color: '#fff' } } },
+            elements: { arc: { borderWidth: 0 } }
+          }
+        });
+      } catch (e) { logLine("Pie chart error, " + e.message); }
 
       // BAR chart
-      new Chart(document.getElementById('summaryBar'), {
-        type: 'bar',
-        data: {
-          labels: ['Spent', 'Profit', 'Value'],
-          datasets: [{ label: 'NZD', data: [ totalSpent / f, totalProfit / f, totalValue / f ], backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(255,205,86,0.6)', 'rgba(75,192,192,0.6)' ] }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: { beginAtZero: true, ticks: { callback: v => '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 }) }, grid: { color: '#444', borderColor: '#444' } },
-            x: { grid: { color: '#444' } }
-          },
-          plugins: { legend: { display: false } }
-        }
-      });
-
-      // Cards per holding
-      rawRows.forEach(r => {
-        const tcUsd = parseFloat((r['Total Cost'] || '').replace(/[^\d.-]/g, '')) || 0;
-        const mvUsd = parseFloat((r['Market Value'] || '').replace(/[^\d.-]/g, '')) || 0;
-        const mvNzd = parseFloat((r['NZD'] || '').replace(/[^\d.-]/g, '')) || 0;
-        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-        const profitNzd = mvNzd - costNzd;
-        const pctChange = parseFloat((r['% Change'] || '').replace(/[^\d.-]/g, '')) || 0;
-
-        const card = document.createElement('div');
-        card.className = 'chart-card';
-        card.innerHTML = `
-          <h2>${r.Ticker}</h2>
-          <div class="chart-container"><canvas id="chart-${r.Ticker}"></canvas></div>
-        `;
-        card.style.border = profitNzd >= 0 ? '3px solid #28a745' : '3px solid #dc3545';
-        dashboard.appendChild(card);
-
-        new Chart(document.getElementById(\`chart-${r.Ticker}\`), {
+      try {
+        new Chart(document.getElementById('summaryBar'), {
+          type: 'bar',
           data: {
-            labels: ['Cost', 'Value', 'Profit', '% Change'],
-            datasets: [
-              { type: 'bar', label: 'NZD', data: [ costNzd / f, mvNzd / f, profitNzd / f, null ], backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(75,192,192,0.6)', 'rgba(255,205,86,0.6)' ] },
-              { type: 'line', label: '% Change', data: [ null, null, null, pctChange ], yAxisID: 'PCT', borderColor: 'rgba(255,99,132,0.8)', backgroundColor: 'rgba(255,99,132,0.4)', tension: 0.3, pointRadius: 4, fill: false }
-            ]
+            labels: ['Spent', 'Profit', 'Value'],
+            datasets: [{ label: 'NZD', data: [ totalSpent / f, totalProfit / f, totalValue / f ], backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(255,205,86,0.6)', 'rgba(75,192,192,0.6)' ] }]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-              y: { beginAtZero: true, title: { display: true, text: 'NZD' }, ticks: { callback: v => '$' + Number(v).toLocaleString() }, grid: { color: '#444' } },
-              PCT: { type: 'linear', position: 'right', title: { display: true, text: '% Change' }, grid: { drawOnChartArea: false }, ticks: { callback: v => v + '%' } }
+              y: { beginAtZero: true, ticks: { callback: v => '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 }) }, grid: { color: '#444', borderColor: '#444' } },
+              x: { grid: { color: '#444' } }
             },
-            plugins: {
-              tooltip: { callbacks: { label: ctx => ctx.dataset.type === 'line' ? `% Change: ${ctx.parsed.y}%` : `NZD $${Number(ctx.parsed.y).toLocaleString()}` } },
-              legend: { position: 'bottom' }
-            }
+            plugins: { legend: { display: false } }
           }
         });
+      } catch (e) { logLine("Bar chart error, " + e.message); }
+
+      // Cards per holding
+      rawRows.forEach(r => {
+        const tcUsd = numFromCell(r['Total Cost']);
+        const mvUsd = numFromCell(r['Market Value']);
+        const mvNzd = numFromCell(r['NZD']);
+        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
+        const profitNzd = mvNzd - costNzd;
+        const pctChange = numFromCell(r['% Change']);
+
+        const card = document.createElement('div');
+        card.className = 'chart-card';
+        const elId = "chart_" + safeTickerId(r.Ticker);
+        card.innerHTML = `
+          <h2>${r.Ticker}</h2>
+          <div class="chart-container"><canvas id="${elId}"></canvas></div>
+        `;
+        card.style.border = profitNzd >= 0 ? '3px solid #28a745' : '3px solid #dc3545';
+        dashboard.appendChild(card);
+
+        try {
+          new Chart(document.getElementById(elId), {
+            data: {
+              labels: ['Cost', 'Value', 'Profit', '% Change'],
+              datasets: [
+                { type: 'bar', label: 'NZD', data: [ costNzd / f, mvNzd / f, profitNzd / f, null ], backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(75,192,192,0.6)', 'rgba(255,205,86,0.6)' ] },
+                { type: 'line', label: '% Change', data: [ null, null, null, pctChange ], yAxisID: 'PCT', borderColor: 'rgba(255,99,132,0.8)', backgroundColor: 'rgba(255,99,132,0.4)', tension: 0.3, pointRadius: 4, fill: false }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: { beginAtZero: true, title: { display: true, text: 'NZD' }, ticks: { callback: v => '$' + Number(v).toLocaleString() }, grid: { color: '#444' } },
+                PCT: { type: 'linear', position: 'right', title: { display: true, text: '% Change' }, grid: { drawOnChartArea: false }, ticks: { callback: v => v + '%' } }
+              },
+              plugins: {
+                tooltip: { callbacks: { label: ctx => ctx.dataset.type === 'line' ? `% Change: ${ctx.parsed.y}%` : `NZD $${Number(ctx.parsed.y).toLocaleString()}` } },
+                legend: { position: 'bottom' }
+              }
+            }
+          });
+        } catch (e) { logLine("Holding chart error for " + r.Ticker + ", " + e.message); }
       });
     }
 
-    // ---------- First paint ----------
-    refreshAuthUI();
-    cleanAuthHashOnce();
+    /* ----------------------- First paint ----------------------- */
+    (async function init() {
+      try {
+        await refreshAuthUI();
+        cleanAuthHashOnce();
+        loadCsv();
+        logLine("Init done");
+      } catch (e) {
+        logLine("Init error, " + e.message);
+      }
+    })();
   </script>
 </body>
 </html>
-
 
