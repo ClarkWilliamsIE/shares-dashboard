@@ -61,10 +61,12 @@
   </div>
 
   <script>
+    // Supabase client
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
 
+    // Elements
     const authStatus = document.getElementById('authStatus');
     const wlForm = document.getElementById('watchlistForm');
     const wlTicker = document.getElementById('wlTicker');
@@ -75,12 +77,12 @@
 
     let currentUser = null;
 
-    // account button opens login card in parent
+    // Open login card in parent
     btnAccount.addEventListener('click', () => {
       window.parent && window.parent.postMessage({ type:'openLogin' }, '*');
     });
 
-    // parent can ask us to refresh auth
+    // Parent can force a refresh
     window.addEventListener('message', async evt => {
       const data = evt.data || {};
       if (data.type === 'forceAuthRefresh') {
@@ -90,7 +92,7 @@
       }
     });
 
-    // height to parent
+    // Height to parent
     function postHeight() {
       const h = document.documentElement.scrollHeight || document.body.scrollHeight || 600;
       window.parent && window.parent.postMessage({ type:'watchlistHeight', height:h }, '*');
@@ -98,6 +100,7 @@
     if ('ResizeObserver' in window) new ResizeObserver(postHeight).observe(document.body);
     window.addEventListener('load', postHeight);
 
+    // Auth UI
     async function refreshAuthUI() {
       const { data: { session } } = await supabase.auth.getSession();
       currentUser = session ? session.user : null;
@@ -105,12 +108,14 @@
       wlForm.style.display = currentUser ? 'grid' : 'none';
 
       if (!currentUser) {
-        // tell parent we need login if someone hit this page while signed out
+        // Ask parent to show login if user is not signed in
         window.parent && window.parent.postMessage({ type:'auth', status:'signedOut' }, '*');
       }
       postHeight();
     }
+    supabase.auth.onAuthStateChange(async () => { await refreshAuthUI(); });
 
+    // Data load
     async function loadWatchlist() {
       const { data, error } = await supabase
         .from('watchlist')
@@ -166,6 +171,7 @@
     async function addWatchlistItem(evt) {
       evt.preventDefault();
       if (!currentUser) { alert('Please sign in to add items'); return; }
+
       const rawTicker = wlTicker.value.trim().toUpperCase();
       const rawCost = wlCost.value.trim();
       const cost = Number(rawCost);
@@ -177,23 +183,27 @@
       const addedEmail = sessionData && sessionData.session && sessionData.session.user && sessionData.session.user.email;
 
       const { error } = await supabase.from('watchlist').insert({
-        ticker: rawTicker, cost_price: cost, added_by: currentUser.id, added_by_email: addedEmail || null
+        ticker: rawTicker,
+        cost_price: cost,
+        added_by: currentUser.id,
+        added_by_email: addedEmail || null
       });
 
       wlAddBtn.disabled = false;
       if (error) { alert(error.message); return; }
-      wlTicker.value = ''; wlCost.value = '';
+      wlTicker.value = '';
+      wlCost.value = '';
     }
 
     wlForm.addEventListener('submit', addWatchlistItem);
 
-    // realtime updates
+    // Realtime updates
     const wlChannel = supabase
       .channel('public:watchlist')
       .on('postgres_changes', { event:'*', schema:'public', table:'watchlist' }, () => loadWatchlist())
       .subscribe();
 
-    // init
+    // Init
     (async function init() {
       await refreshAuthUI();
       await loadWatchlist();
@@ -202,4 +212,5 @@
   </script>
 </body>
 </html>
+
 
