@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Winnerland, Login Trial</title>
+  <title>Winnerland, Main</title>
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -50,9 +50,6 @@
 
     /* tiny logger */
     #log { max-width: 1024px; margin: 1rem auto; background: #0f0f0f; border: 1px solid #333; padding: 0.5rem 0.75rem; border-radius: 8px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
-    #watchlistTable th, #watchlistTable td { border-bottom: 1px solid #2a2a2a; }
-    #watchlistTable tr:hover { background: #161616; }
-    .pill { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; background: #222; border: 1px solid #333; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -89,41 +86,26 @@
     </div>
   </div>
 
-  <!-- Watchlist card -->
+  <!-- Watchlist card embeds the separate page -->
   <div id="watchlistCard" class="gate">
     <div class="chart-card">
       <h2>Shared watchlist</h2>
-
-      <!-- add form, hidden until signed in -->
-      <form id="watchlistForm" class="auth" style="grid-template-columns: repeat(5, max-content); display:none; margin-bottom: 0.5rem;">
-        <input id="wlTicker" type="text" placeholder="Ticker, for example AAPL" inputmode="latin" />
-        <input id="wlCost" type="number" step="0.0001" min="0" placeholder="Cost price, for example 123.45" />
-        <button id="wlAdd" type="submit" class="btn">Add to watchlist</button>
-        <span id="wlHint" class="muted" style="align-self:center;">Signed in can add, everyone can view</span>
-      </form>
-
-      <div id="watchlistTableWrap" style="overflow:auto;">
-        <table id="watchlistTable" style="width:100%; border-collapse: collapse;">
-          <thead>
-            <tr>
-              <th style="text-align:left; padding:6px;">Ticker</th>
-              <th style="text-align:right; padding:6px;">Cost price</th>
-              <th style="text-align:left; padding:6px;">Added by</th>
-              <th style="text-align:left; padding:6px;">When</th>
-              <th style="text-align:left; padding:6px;">Action</th>
-            </tr>
-          </thead>
-          <tbody id="watchlistBody">
-            <tr><td colspan="5" class="muted" style="padding:8px;">Loading watchlist...</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <iframe
+        id="watchlistFrame"
+        src="./watchlist.html"
+        title="Shared watchlist"
+        style="width:100%, border:0, min-height:360px, border-radius:8px, overflow:hidden;"
+        loading="lazy"
+        referrerpolicy="same-origin"
+        sandbox="allow-same-origin allow-scripts allow-forms"
+      ></iframe>
     </div>
   </div>
 
   <!-- Log panel -->
   <div id="log">Status, loading...</div>
 
+  <!-- Charts dashboard -->
   <div class="dashboard" id="dashboard"></div>
 
   <script>
@@ -157,7 +139,7 @@
     /* ----------------------- Helpers ----------------------- */
     function currentPageUrl() {
       const url = new URL(window.location.href);
-      return url.origin + url.pathname; // exact file path or folder index
+      return url.origin + url.pathname;
     }
 
     async function refreshAuthUI() {
@@ -246,7 +228,6 @@
     });
 
     /* ----------------------- Data and charts ----------------------- */
-    // Make sure this CSV is published to the web, File, Share, Publish to the web
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
     let rawRows = [];
@@ -366,9 +347,7 @@
       // Line chart
       const lineLabels = portfolioData.map(r => r.date);
       const lineVals = portfolioData.map(r => r.portfolioValue);
-      if (lineVals.length === 0) {
-        logLine("No time series data, skipping line chart");
-      } else {
+      if (lineVals.length) {
         const minValue = Math.min.apply(null, lineVals);
         const maxValue = Math.max.apply(null, lineVals);
         const margin = Math.max(1, (maxValue - minValue) * 0.1);
@@ -392,6 +371,8 @@
             }
           });
         } catch (e) { logLine("Line chart error, " + e.message); }
+      } else {
+        logLine("No time series data, skipping line chart");
       }
 
       // PIE chart
@@ -475,119 +456,14 @@
       });
     }
 
-    /* ----------------------- Watchlist feature ----------------------- */
-    const wlForm = document.getElementById('watchlistForm');
-    const wlTicker = document.getElementById('wlTicker');
-    const wlCost = document.getElementById('wlCost');
-    const wlAddBtn = document.getElementById('wlAdd');
-    const wlBody = document.getElementById('watchlistBody');
-    let currentUser = null;
-
-    async function loadWatchlist() {
-      const { data, error } = await supabase
-        .from('watchlist')
-        .select('id, created_at, ticker, cost_price, added_by, added_by_email')
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      if (error) {
-        wlBody.innerHTML = `<tr><td colspan="5" class="muted" style="padding:8px;">Could not load watchlist (likely the table or policies are not set yet)</td></tr>`;
-        logLine("Watchlist load error, " + error.message);
-        return;
+    /* ----------------------- Iframe auto resize ----------------------- */
+    window.addEventListener('message', evt => {
+      const data = evt.data || {};
+      if (data.type === 'watchlistHeight') {
+        const frame = document.getElementById('watchlistFrame');
+        if (frame) frame.style.height = Math.max(360, Number(data.height) || 360) + 'px';
       }
-      renderWatchlist(data || []);
-    }
-
-    function renderWatchlist(rows) {
-      if (!rows.length) {
-        wlBody.innerHTML = `<tr><td colspan="5" class="muted" style="padding:8px;">No items yet</td></tr>`;
-        return;
-      }
-      wlBody.innerHTML = rows.map(r => {
-        const canDelete = currentUser && currentUser.id === r.added_by;
-        const who = r.added_by_email || 'member';
-        const when = new Date(r.created_at).toLocaleString();
-        const price = Number(r.cost_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 });
-        const delBtn = canDelete
-          ? `<button class="btn" data-del="${r.id}" style="padding:0.25rem 0.5rem;">Delete</button>`
-          : `<span class="pill">View</span>`;
-        return `
-          <tr>
-            <td style="padding:6px;">${r.ticker}</td>
-            <td style="padding:6px; text-align:right;">$${price}</td>
-            <td style="padding:6px;">${who}</td>
-            <td style="padding:6px;">${when}</td>
-            <td style="padding:6px;">${delBtn}</td>
-          </tr>
-        `;
-      }).join('');
-
-      wlBody.querySelectorAll('[data-del]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-del');
-          btn.disabled = true;
-          const { error } = await supabase.from('watchlist').delete().eq('id', id);
-          if (error) {
-            alert(error.message);
-            btn.disabled = false;
-          }
-        });
-      });
-    }
-
-    async function addWatchlistItem(evt) {
-      evt.preventDefault();
-      if (!currentUser) {
-        alert('Please sign in to add items');
-        return;
-      }
-      const rawTicker = wlTicker.value.trim().toUpperCase();
-      const rawCost = wlCost.value.trim();
-      const cost = Number(rawCost);
-
-      if (!rawTicker) { alert('Enter a ticker'); return; }
-      if (!isFinite(cost) || cost <= 0) { alert('Enter a valid cost price'); return; }
-
-      wlAddBtn.disabled = true;
-      const { data: sessionData } = await supabase.auth.getSession();
-      const addedEmail = sessionData && sessionData.session && sessionData.session.user && sessionData.session.user.email;
-
-      const { error } = await supabase.from('watchlist').insert({
-        ticker: rawTicker,
-        cost_price: cost,
-        added_by: currentUser.id,
-        added_by_email: addedEmail || null
-      });
-
-      wlAddBtn.disabled = false;
-      if (error) {
-        alert(error.message);
-        logLine("Add watchlist error, " + error.message);
-        return;
-      }
-      wlTicker.value = '';
-      wlCost.value = '';
-      // Realtime will refresh the table
-    }
-
-    wlForm.addEventListener('submit', addWatchlistItem);
-
-    const wlChannel = supabase
-      .channel('public:watchlist')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist' }, payload => {
-        logLine('Watchlist change, ' + payload.eventType);
-        loadWatchlist();
-      })
-      .subscribe();
-
-    // Hook into auth UI to toggle the add form
-    const originalRefreshAuthUI = refreshAuthUI;
-    refreshAuthUI = async function wrappedRefresh() {
-      await originalRefreshAuthUI();
-      const { data: { session } } = await supabase.auth.getSession();
-      currentUser = session ? session.user : null;
-      wlForm.style.display = currentUser ? 'grid' : 'none';
-    };
+    }, false);
 
     /* ----------------------- First paint ----------------------- */
     (async function init() {
@@ -595,7 +471,7 @@
         await refreshAuthUI();
         cleanAuthHashOnce();
         loadCsv();
-        loadWatchlist();
+        renderCharts(false);
         logLine("Init done");
       } catch (e) {
         logLine("Init error, " + e.message);
