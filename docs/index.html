@@ -5,51 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Winnerland, Main</title>
 
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-  <!-- Supabase JS v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     :root { color-scheme: dark; }
-    body {
-      margin: 0;
-      padding: 1rem;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-      background: #121212;
-      color: #fff;
-    }
+    body { margin: 0; padding: 1rem; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background: #121212; color: #fff; }
     h1 { text-align: center; margin-bottom: 0.5rem; color: #fff; }
 
-    /* switch */
-    .switch { position: relative; display: inline-block; width: 50px; height: 26px; margin-right: 0.5rem; vertical-align: middle; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; inset: 0; background-color: #3a3a3a; transition: .2s; border-radius: 26px; }
-    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .2s; border-radius: 50%; }
-    input:checked + .slider { background-color: #2196F3; }
-    input:checked + .slider:before { transform: translateX(24px); }
-
-    /* layout */
     .topbar { display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap; }
     .stack { display: flex; align-items: center; gap: 0.5rem; }
-    .auth { display: grid; grid-template-columns: repeat(6, max-content); gap: 0.5rem; align-items: center; justify-content: center; margin-top: 0.5rem; }
-    .auth input { padding: 0.45rem 0.6rem; background: #1e1e1e; border: 1px solid #333; color: #fff; border-radius: 6px; }
     .btn { padding: 0.45rem 0.7rem; background: #2a2a2a; border: 1px solid #3a3a3a; color: #fff; border-radius: 6px; cursor: pointer; }
     .btn:hover { background: #333; }
     .muted { opacity: 0.85; }
 
+    .gate { max-width: 1024px; margin: 1rem auto; }
     .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 1rem; }
     .chart-card { background: #1e1e1e; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); padding: 1rem; display: flex; flex-direction: column; border: 3px solid transparent; }
     .chart-card h2 { margin: 0 0 0.5rem; font-size: 1.1rem; text-align: center; color: #fff; }
     .chart-container { position: relative; flex: 1; height: 200px; }
     .chart-container canvas { width: 100% !important; height: 100% !important; }
-
-    .gate { max-width: 1024px; margin: 1rem auto; }
-
-    /* tiny logger */
     #log { max-width: 1024px; margin: 1rem auto; background: #0f0f0f; border: 1px solid #333; padding: 0.5rem 0.75rem; border-radius: 8px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+    /* Modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    .modal { width: min(520px, 92vw); background: #1e1e1e; border: 1px solid #333; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+    .modal header { display:flex; align-items:center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #2a2a2a; }
+    .modal header h3 { margin: 0; font-size: 1rem; }
+    .modal .close { background: transparent; border: 0; color: #bbb; font-size: 20px; cursor: pointer; }
+    .modal .body { padding: 0; }
+    .modal iframe { width: 100%; height: 360px; border: 0; border-radius: 0 0 12px 12px; }
   </style>
 </head>
 <body>
@@ -58,36 +44,22 @@
   <!-- Top controls -->
   <div class="topbar">
     <div class="stack">
-      <label class="switch">
-        <input type="checkbox" id="memberToggle" />
-        <span class="slider"></span>
-      </label>
-      <span>Member view</span>
+      <button id="btnLogin" class="btn">Login to access member tools</button>
+      <button id="btnSignOut" class="btn" style="display:none;">Sign out</button>
     </div>
     <div class="stack">
       <span id="authStatus" class="muted">Not signed in</span>
     </div>
   </div>
 
-  <!-- Auth controls -->
-  <div class="auth" id="authControls">
-    <input id="email" type="email" placeholder="email@example.com" autocomplete="username" />
-    <input id="password" type="password" placeholder="password" autocomplete="current-password" />
-    <button id="btnSignUp" class="btn">Sign up</button>
-    <button id="btnSignIn" class="btn">Login</button>
-    <button id="btnSignOut" class="btn" style="display:none;">Sign out</button>
-  </div>
-
-  <!-- Member only area -->
+  <!-- Member tools, only when signed in -->
   <div id="proFeatures" class="gate" style="display:none;">
     <div class="chart-card">
       <h2>Member tools</h2>
-      <p class="muted" style="text-align:center;">You are signed in, interactive features will appear here.</p>
+      <p class="muted" style="text-align:center; margin-top: -0.25rem;">You are signed in, tools appear below</p>
     </div>
-  </div>
 
-  <!-- Watchlist card embeds the separate page -->
-  <div id="watchlistCard" class="gate">
+    <!-- Watchlist inside Member tools -->
     <div class="chart-card">
       <h2>Shared watchlist</h2>
       <iframe
@@ -102,19 +74,32 @@
     </div>
   </div>
 
-  <!-- Log panel -->
-  <div id="log">Status, loading...</div>
-
-  <!-- Charts dashboard -->
+  <!-- Public charts -->
   <div class="dashboard" id="dashboard"></div>
 
+  <!-- Log -->
+  <div id="log">Status, loading...</div>
+
+  <!-- Login modal -->
+  <div id="loginBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+      <header>
+        <h3 id="loginTitle">Member login</h3>
+        <button class="close" id="closeLogin" aria-label="Close">×</button>
+      </header>
+      <div class="body">
+        <iframe id="loginFrame" src="./login.html" title="Login form" referrerpolicy="same-origin" sandbox="allow-same-origin allow-scripts allow-forms"></iframe>
+      </div>
+    </div>
+  </div>
+
   <script>
-    /* tiny logger */
+    /* Logger */
     const logBox = document.getElementById('log');
     function logLine(msg) { console.log(msg); if (logBox) logBox.textContent += "\\n" + msg; }
     logBox.textContent = "Status, booting app...";
 
-    /* Supabase */
+    /* Supabase config */
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -123,95 +108,64 @@
 
     /* Elements */
     const authStatus = document.getElementById('authStatus');
-    const btnSignUp = document.getElementById('btnSignUp');
-    const btnSignIn = document.getElementById('btnSignIn');
+    const btnLogin = document.getElementById('btnLogin');
     const btnSignOut = document.getElementById('btnSignOut');
-    const emailEl = document.getElementById('email');
-    const passEl = document.getElementById('password');
     const proFeatures = document.getElementById('proFeatures');
-    const memberToggle = document.getElementById('memberToggle');
     const dashboard = document.getElementById('dashboard');
 
-    /* Helpers */
-    function currentPageUrl() {
-      const url = new URL(window.location.href);
-      return url.origin + url.pathname;
-    }
+    /* Modal helpers */
+    const backdrop = document.getElementById('loginBackdrop');
+    const closeLogin = document.getElementById('closeLogin');
+    function openLogin() { backdrop.style.display = 'flex'; backdrop.setAttribute('aria-hidden','false'); }
+    function closeLoginModal() { backdrop.style.display = 'none'; backdrop.setAttribute('aria-hidden','true'); }
 
+    btnLogin.addEventListener('click', openLogin);
+    closeLogin.addEventListener('click', closeLoginModal);
+    backdrop.addEventListener('click', e => { if (e.target === backdrop) closeLoginModal(); });
+
+    /* Auth UI */
     async function refreshAuthUI() {
-      const { data: { session} } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       const signedIn = !!(session && session.user);
       authStatus.textContent = signedIn ? `Signed in as ${session.user.email}` : 'Not signed in';
       btnSignOut.style.display = signedIn ? 'inline-block' : 'none';
-      btnSignIn.style.display = signedIn ? 'none' : 'inline-block';
-      btnSignUp.style.display = signedIn ? 'none' : 'inline-block';
-      emailEl.style.display = signedIn ? 'none' : 'inline-block';
-      passEl.style.display = signedIn ? 'none' : 'inline-block';
+      btnLogin.style.display = signedIn ? 'none' : 'inline-block';
       proFeatures.style.display = signedIn ? 'block' : 'none';
     }
-
     function cleanAuthHashOnce() {
       if (window.location.hash && window.location.hash.includes("access_token")) {
         history.replaceState({}, document.title, window.location.pathname + window.location.search);
         logLine("Cleaned auth hash");
       }
     }
-
     supabase.auth.onAuthStateChange(() => { refreshAuthUI(); cleanAuthHashOnce(); });
 
-    function setBusy(busy) {
-      [btnSignUp, btnSignIn, btnSignOut].forEach(b => b.disabled = busy);
-      const hideCreds = btnSignUp.style.display === 'none';
-      emailEl.disabled = busy && !hideCreds;
-      passEl.disabled = busy && !hideCreds;
-    }
-
-    /* Auth actions */
-    btnSignUp.addEventListener('click', async () => {
-      const email = emailEl.value.trim();
-      const password = passEl.value;
-      if (!email || !password) { alert('Enter email and password'); return; }
-      setBusy(true);
-      const emailRedirectTo = currentPageUrl();
-      const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo } });
-      setBusy(false);
-      if (error) { alert(error.message); logLine("Sign up error, " + error.message); }
-      else { alert('Check your email for a confirmation link'); logLine("Sign up ok, awaiting email confirm"); }
-    });
-
-    btnSignIn.addEventListener('click', async () => {
-      const email = emailEl.value.trim();
-      const password = passEl.value;
-      if (!email || !password) { alert('Enter email and password'); return; }
-      setBusy(true);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setBusy(false);
-      if (error) { alert(error.message); logLine("Login error, " + error.message); }
-      else { logLine("Login ok"); }
-    });
-
     btnSignOut.addEventListener('click', async () => {
-      setBusy(true);
       await supabase.auth.signOut();
-      setBusy(false);
       logLine("Signed out");
     });
 
-    memberToggle.addEventListener('change', async e => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { e.target.checked = false; alert('Please sign in to use Member view'); return; }
-      renderCharts(true);
-    });
+    /* Receive messages from iframes */
+    window.addEventListener('message', evt => {
+      const data = evt.data || {};
+      if (data.type === 'watchlistHeight') {
+        const frame = document.getElementById('watchlistFrame');
+        if (frame) frame.style.height = Math.max(360, Number(data.height) || 360) + 'px';
+      }
+      if (data.type === 'authChanged') {
+        closeLoginModal();
+        refreshAuthUI();
+        logLine("Auth changed, closing login modal");
+      }
+    }, false);
 
-    /* Data and charts */
+    /* Charts */
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
-
     let rawRows = [];
     let portfolioData = [];
 
     function numFromCell(val) { if (val == null) return 0; return parseFloat(String(val).replace(/[^\d.-]/g,'')) || 0; }
     function safeTickerId(t) { return String(t || 'TICKER').replace(/[^A-Za-z0-9_-]/g, '_'); }
-
     function buildPortfolioFromHeaders(rows) {
       let dateKey = null, valueKey = null;
       const headers = rows.length ? Object.keys(rows[0]) : [];
@@ -227,7 +181,6 @@
         return { date, portfolioValue: v };
       }).filter(Boolean);
     }
-
     function ensureDemoWhenEmpty() {
       const needDemo = portfolioData.length === 0 && rawRows.length === 0;
       if (!needDemo) return;
@@ -242,7 +195,6 @@
         { date: '2025-09', portfolioValue: 3100 }
       ];
     }
-
     function loadCsvAndRender() {
       logLine("Loading CSV, " + csvUrl);
       Papa.parse(csvUrl, {
@@ -270,12 +222,10 @@
         }
       });
     }
-
     function renderCharts(memberView) {
       const f = memberView ? 14 : 1;
       dashboard.innerHTML = '';
 
-      /* totals */
       let totalSpent = 0, totalValue = 0;
       rawRows.forEach(r => {
         const tcUsd   = numFromCell(r['Total Cost']);
@@ -287,34 +237,21 @@
       });
       const totalProfit = totalValue - totalSpent;
 
-      /* pie card */
       const pieCard = document.createElement('div');
       pieCard.className = 'chart-card';
-      pieCard.innerHTML = `
-        <h2>Allocation ${memberView ? '(per member NZD)' : ''}</h2>
-        <div class="chart-container"><canvas id="summaryPie"></canvas></div>
-      `;
+      pieCard.innerHTML = `<h2>Allocation ${memberView ? '(per member NZD)' : ''}</h2><div class="chart-container"><canvas id="summaryPie"></canvas></div>`;
       dashboard.appendChild(pieCard);
 
-      /* bar card */
       const barCard = document.createElement('div');
       barCard.className = 'chart-card';
-      barCard.innerHTML = `
-        <h2>Portfolio Summary ${memberView ? '(per member NZD)' : ''}</h2>
-        <div class="chart-container"><canvas id="summaryBar"></canvas></div>
-      `;
+      barCard.innerHTML = `<h2>Portfolio Summary ${memberView ? '(per member NZD)' : ''}</h2><div class="chart-container"><canvas id="summaryBar"></canvas></div>`;
       dashboard.appendChild(barCard);
 
-      /* line card */
       const lineCard = document.createElement('div');
       lineCard.className = 'chart-card';
-      lineCard.innerHTML = `
-        <h2>Portfolio Value Over Time</h2>
-        <div class="chart-container"><canvas id="portfolioValueLine"></canvas></div>
-      `;
+      lineCard.innerHTML = `<h2>Portfolio Value Over Time</h2><div class="chart-container"><canvas id="portfolioValueLine"></canvas></div>`;
       dashboard.appendChild(lineCard);
 
-      /* line chart */
       const lineLabels = portfolioData.map(r => r.date);
       const lineVals = portfolioData.map(r => r.portfolioValue);
       if (lineVals.length) {
@@ -329,23 +266,17 @@
               responsive: true,
               maintainAspectRatio: false,
               scales: {
-                y: {
-                  min: minValue - margin,
-                  max: maxValue + margin,
-                  ticks: { callback: v => '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 }) },
-                  grid: { color: '#444', borderColor: '#444' }
-                },
+                y: { min: minValue - margin, max: maxValue + margin,
+                     ticks: { callback: v => '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2 }) },
+                     grid: { color: '#444', borderColor: '#444' } },
                 x: { grid: { color: '#444' } }
               },
               plugins: { legend: { labels: { color: '#fff' } } }
             }
           });
         } catch (e) { logLine("Line chart error, " + e.message); }
-      } else {
-        logLine("No time series data, skipping line chart");
       }
 
-      /* pie chart */
       const pieLabels = rawRows.length ? rawRows.map(r => r.Ticker) : ['None'];
       const pieData = rawRows.length ? rawRows.map(r => numFromCell(r['NZD']) / f) : [1];
       try {
@@ -361,14 +292,12 @@
         });
       } catch (e) { logLine("Pie chart error, " + e.message); }
 
-      /* bar chart */
       try {
         new Chart(document.getElementById('summaryBar'), {
           type: 'bar',
-          data: {
-            labels: ['Spent', 'Profit', 'Value'],
-            datasets: [{ label: 'NZD', data: [ totalSpent / f, totalProfit / f, totalValue / f ], backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(255,205,86,0.6)', 'rgba(75,192,192,0.6)' ] }]
-          },
+          data: { labels: ['Spent', 'Profit', 'Value'],
+                  datasets: [{ label: 'NZD', data: [ totalSpent / f, totalProfit / f, totalValue / f ],
+                               backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(255,205,86,0.6)', 'rgba(75,192,192,0.6)' ] }] },
           options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -381,7 +310,6 @@
         });
       } catch (e) { logLine("Bar chart error, " + e.message); }
 
-      /* per holding cards */
       rawRows.forEach(r => {
         const tcUsd = numFromCell(r['Total Cost']);
         const mvUsd = numFromCell(r['Market Value']);
@@ -393,10 +321,7 @@
         const card = document.createElement('div');
         card.className = 'chart-card';
         const elId = "chart_" + safeTickerId(r.Ticker);
-        card.innerHTML = `
-          <h2>${r.Ticker}</h2>
-          <div class="chart-container"><canvas id="${elId}"></canvas></div>
-        `;
+        card.innerHTML = `<h2>${r.Ticker}</h2><div class="chart-container"><canvas id="${elId}"></canvas></div>`;
         card.style.border = profitNzd >= 0 ? '3px solid #28a745' : '3px solid #dc3545';
         dashboard.appendChild(card);
 
@@ -405,13 +330,14 @@
             data: {
               labels: ['Cost', 'Value', 'Profit', '% Change'],
               datasets: [
-                { type: 'bar', label: 'NZD', data: [ costNzd / f, mvNzd / f, profitNzd / f, null ], backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(75,192,192,0.6)', 'rgba(255,205,86,0.6)' ] },
-                { type: 'line', label: '% Change', data: [ null, null, null, pctChange ], yAxisID: 'PCT', borderColor: 'rgba(255,99,132,0.8)', backgroundColor: 'rgba(255,99,132,0.4)', tension: 0.3, pointRadius: 4, fill: false }
+                { type: 'bar', label: 'NZD', data: [ costNzd / f, mvNzd / f, profitNzd / f, null ],
+                  backgroundColor: [ 'rgba(54,162,235,0.6)', 'rgba(75,192,192,0.6)', 'rgba(255,205,86,0.6)' ] },
+                { type: 'line', label: '% Change', data: [ null, null, null, pctChange ], yAxisID: 'PCT',
+                  borderColor: 'rgba(255,99,132,0.8)', backgroundColor: 'rgba(255,99,132,0.4)', tension: 0.3, pointRadius: 4, fill: false }
               ]
             },
             options: {
-              responsive: true,
-              maintainAspectRatio: false,
+              responsive: true, maintainAspectRatio: false,
               scales: {
                 y: { beginAtZero: true, title: { display: true, text: 'NZD' }, ticks: { callback: v => '$' + Number(v).toLocaleString() }, grid: { color: '#444' } },
                 PCT: { type: 'linear', position: 'right', title: { display: true, text: '% Change' }, grid: { drawOnChartArea: false }, ticks: { callback: v => v + '%' } }
@@ -426,21 +352,12 @@
       });
     }
 
-    /* Iframe auto resize */
-    window.addEventListener('message', evt => {
-      const data = evt.data || {};
-      if (data.type === 'watchlistHeight') {
-        const frame = document.getElementById('watchlistFrame');
-        if (frame) frame.style.height = Math.max(360, Number(data.height) || 360) + 'px';
-      }
-    }, false);
-
-    /* First paint */
+    /* Init */
     (async function init() {
       try {
         await refreshAuthUI();
         cleanAuthHashOnce();
-        loadCsvAndRender();  /* only render after CSV finishes */
+        loadCsvAndRender();
         logLine("Init done");
       } catch (e) {
         logLine("Init error, " + e.message);
@@ -449,4 +366,5 @@
   </script>
 </body>
 </html>
+
 
