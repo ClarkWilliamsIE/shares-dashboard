@@ -36,10 +36,17 @@
   </div>
 
   <script>
+    // Clean auth hash fragments after email confirmation
+    if (location.hash && location.hash.includes("access_token")) {
+      history.replaceState({}, document.title, location.pathname + location.search);
+    }
+
+    // Supabase client
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
 
+    // Elements
     const emailEl = document.getElementById('email');
     const passEl = document.getElementById('password');
     const btnSignIn = document.getElementById('btnSignIn');
@@ -48,10 +55,9 @@
     const heading = document.getElementById('heading');
     const msg = document.getElementById('msg');
 
+    // Helpers
     function say(t) { msg.textContent = t; postHeight(); }
     function setBusy(b) { [emailEl, passEl, btnSignIn, btnSignUp, btnSignOut].forEach(x => x.disabled = b); }
-
-    // parent height
     function postHeight() {
       const h = document.documentElement.scrollHeight || document.body.scrollHeight || 360;
       window.parent && window.parent.postMessage({ type:'loginHeight', height:h }, '*');
@@ -70,7 +76,6 @@
         btnSignUp.style.display = 'none';
         btnSignOut.style.display = 'inline-block';
         say(`Signed in as ${session.user.email}`);
-        // tell parent to swap to member tools
         window.parent && window.parent.postMessage({ type:'auth', status:'signedIn' }, '*');
       } else {
         heading.textContent = "Member login";
@@ -83,6 +88,7 @@
       }
     }
 
+    // Actions
     btnSignIn.addEventListener('click', async () => {
       const email = emailEl.value.trim();
       const password = passEl.value;
@@ -94,6 +100,7 @@
       else {
         say('Logged in');
         window.parent && window.parent.postMessage({ type:'auth', status:'signedIn' }, '*');
+        await refreshUI();
       }
     });
 
@@ -122,13 +129,13 @@
       }
     });
 
+    // React to auth changes that happen outside this iframe
     supabase.auth.onAuthStateChange(async () => { await refreshUI(); });
 
-    (async function init() {
-      await refreshUI();
-      postHeight();
-    })();
+    // Init
+    (async function init() { await refreshUI(); postHeight(); })();
   </script>
 </body>
 </html>
+
 
