@@ -94,7 +94,7 @@
         id="watchlistFrame"
         src="./watchlist.html"
         title="Shared watchlist"
-        style="width:100%, border:0, min-height:360px, border-radius:8px, overflow:hidden;"
+        style="width:100%; border:0; min-height:360px; border-radius:8px; overflow:hidden;"
         loading="lazy"
         referrerpolicy="same-origin"
         sandbox="allow-same-origin allow-scripts allow-forms"
@@ -109,23 +109,19 @@
   <div class="dashboard" id="dashboard"></div>
 
   <script>
-    /* ----------------------- tiny logger ----------------------- */
+    /* tiny logger */
     const logBox = document.getElementById('log');
-    function logLine(msg) {
-      console.log(msg);
-      if (logBox) logBox.textContent += "\\n" + msg;
-    }
+    function logLine(msg) { console.log(msg); if (logBox) logBox.textContent += "\\n" + msg; }
     logBox.textContent = "Status, booting app...";
 
-    /* ----------------------- Supabase setup ----------------------- */
+    /* Supabase */
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
-
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
 
-    /* ----------------------- Elements ----------------------- */
+    /* Elements */
     const authStatus = document.getElementById('authStatus');
     const btnSignUp = document.getElementById('btnSignUp');
     const btnSignIn = document.getElementById('btnSignIn');
@@ -136,14 +132,14 @@
     const memberToggle = document.getElementById('memberToggle');
     const dashboard = document.getElementById('dashboard');
 
-    /* ----------------------- Helpers ----------------------- */
+    /* Helpers */
     function currentPageUrl() {
       const url = new URL(window.location.href);
       return url.origin + url.pathname;
     }
 
     async function refreshAuthUI() {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session} } = await supabase.auth.getSession();
       const signedIn = !!(session && session.user);
       authStatus.textContent = signedIn ? `Signed in as ${session.user.email}` : 'Not signed in';
       btnSignOut.style.display = signedIn ? 'inline-block' : 'none';
@@ -161,10 +157,7 @@
       }
     }
 
-    supabase.auth.onAuthStateChange((_event, _session) => {
-      refreshAuthUI();
-      cleanAuthHashOnce();
-    });
+    supabase.auth.onAuthStateChange(() => { refreshAuthUI(); cleanAuthHashOnce(); });
 
     function setBusy(busy) {
       [btnSignUp, btnSignIn, btnSignOut].forEach(b => b.disabled = busy);
@@ -173,26 +166,17 @@
       passEl.disabled = busy && !hideCreds;
     }
 
-    /* ----------------------- Auth actions ----------------------- */
+    /* Auth actions */
     btnSignUp.addEventListener('click', async () => {
       const email = emailEl.value.trim();
       const password = passEl.value;
       if (!email || !password) { alert('Enter email and password'); return; }
       setBusy(true);
       const emailRedirectTo = currentPageUrl();
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo }
-      });
+      const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo } });
       setBusy(false);
-      if (error) {
-        alert(error.message);
-        logLine("Sign up error, " + error.message);
-      } else {
-        alert('Check your email for a confirmation link');
-        logLine("Sign up ok, awaiting email confirm");
-      }
+      if (error) { alert(error.message); logLine("Sign up error, " + error.message); }
+      else { alert('Check your email for a confirmation link'); logLine("Sign up ok, awaiting email confirm"); }
     });
 
     btnSignIn.addEventListener('click', async () => {
@@ -202,12 +186,8 @@
       setBusy(true);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       setBusy(false);
-      if (error) {
-        alert(error.message);
-        logLine("Login error, " + error.message);
-      } else {
-        logLine("Login ok");
-      }
+      if (error) { alert(error.message); logLine("Login error, " + error.message); }
+      else { logLine("Login ok"); }
     });
 
     btnSignOut.addEventListener('click', async () => {
@@ -219,28 +199,18 @@
 
     memberToggle.addEventListener('change', async e => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        e.target.checked = false;
-        alert('Please sign in to use Member view');
-        return;
-      }
+      if (!session) { e.target.checked = false; alert('Please sign in to use Member view'); return; }
       renderCharts(true);
     });
 
-    /* ----------------------- Data and charts ----------------------- */
+    /* Data and charts */
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
 
     let rawRows = [];
     let portfolioData = [];
 
-    function numFromCell(val) {
-      if (val == null) return 0;
-      return parseFloat(String(val).replace(/[^\d.-]/g,'')) || 0;
-    }
-
-    function safeTickerId(t) {
-      return String(t || 'TICKER').replace(/[^A-Za-z0-9_-]/g, '_');
-    }
+    function numFromCell(val) { if (val == null) return 0; return parseFloat(String(val).replace(/[^\d.-]/g,'')) || 0; }
+    function safeTickerId(t) { return String(t || 'TICKER').replace(/[^A-Za-z0-9_-]/g, '_'); }
 
     function buildPortfolioFromHeaders(rows) {
       let dateKey = null, valueKey = null;
@@ -273,7 +243,7 @@
       ];
     }
 
-    function loadCsv() {
+    function loadCsvAndRender() {
       logLine("Loading CSV, " + csvUrl);
       Papa.parse(csvUrl, {
         download: true,
@@ -305,7 +275,7 @@
       const f = memberView ? 14 : 1;
       dashboard.innerHTML = '';
 
-      // Totals
+      /* totals */
       let totalSpent = 0, totalValue = 0;
       rawRows.forEach(r => {
         const tcUsd   = numFromCell(r['Total Cost']);
@@ -317,7 +287,7 @@
       });
       const totalProfit = totalValue - totalSpent;
 
-      // PIE card
+      /* pie card */
       const pieCard = document.createElement('div');
       pieCard.className = 'chart-card';
       pieCard.innerHTML = `
@@ -326,7 +296,7 @@
       `;
       dashboard.appendChild(pieCard);
 
-      // BAR card
+      /* bar card */
       const barCard = document.createElement('div');
       barCard.className = 'chart-card';
       barCard.innerHTML = `
@@ -335,7 +305,7 @@
       `;
       dashboard.appendChild(barCard);
 
-      // Line card
+      /* line card */
       const lineCard = document.createElement('div');
       lineCard.className = 'chart-card';
       lineCard.innerHTML = `
@@ -344,7 +314,7 @@
       `;
       dashboard.appendChild(lineCard);
 
-      // Line chart
+      /* line chart */
       const lineLabels = portfolioData.map(r => r.date);
       const lineVals = portfolioData.map(r => r.portfolioValue);
       if (lineVals.length) {
@@ -375,7 +345,7 @@
         logLine("No time series data, skipping line chart");
       }
 
-      // PIE chart
+      /* pie chart */
       const pieLabels = rawRows.length ? rawRows.map(r => r.Ticker) : ['None'];
       const pieData = rawRows.length ? rawRows.map(r => numFromCell(r['NZD']) / f) : [1];
       try {
@@ -391,7 +361,7 @@
         });
       } catch (e) { logLine("Pie chart error, " + e.message); }
 
-      // BAR chart
+      /* bar chart */
       try {
         new Chart(document.getElementById('summaryBar'), {
           type: 'bar',
@@ -411,7 +381,7 @@
         });
       } catch (e) { logLine("Bar chart error, " + e.message); }
 
-      // Cards per holding
+      /* per holding cards */
       rawRows.forEach(r => {
         const tcUsd = numFromCell(r['Total Cost']);
         const mvUsd = numFromCell(r['Market Value']);
@@ -456,7 +426,7 @@
       });
     }
 
-    /* ----------------------- Iframe auto resize ----------------------- */
+    /* Iframe auto resize */
     window.addEventListener('message', evt => {
       const data = evt.data || {};
       if (data.type === 'watchlistHeight') {
@@ -465,13 +435,12 @@
       }
     }, false);
 
-    /* ----------------------- First paint ----------------------- */
+    /* First paint */
     (async function init() {
       try {
         await refreshAuthUI();
         cleanAuthHashOnce();
-        loadCsv();
-        renderCharts(false);
+        loadCsvAndRender();  /* only render after CSV finishes */
         logLine("Init done");
       } catch (e) {
         logLine("Init error, " + e.message);
@@ -480,3 +449,4 @@
   </script>
 </body>
 </html>
+
