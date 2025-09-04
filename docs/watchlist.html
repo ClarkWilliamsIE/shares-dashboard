@@ -4,25 +4,23 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Winnerland, Watchlist</title>
-
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <style>
     :root { color-scheme: dark; }
-    body { margin: 0; padding: 12px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:#121212; color:#fff; }
-    h2 { margin: 0 0 8px; font-size: 1.1rem; text-align: center; }
-    .wrap { max-width: 1024px; margin: 0 auto; }
-    .card { background:#1e1e1e; border-radius:10px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); padding:12px; }
-    .muted { opacity: 0.85; }
-    .grid { display:grid; grid-template-columns: repeat(5, max-content); gap: 8px; align-items:center; justify-content:center; margin: 8px 0; }
-    input { padding: 8px 10px; background:#1a1a1a; border:1px solid #333; color:#fff; border-radius:6px; }
-    .btn { padding: 8px 10px; background:#2a2a2a; border:1px solid #3a3a3a; color:#fff; border-radius:6px; cursor:pointer; }
+    body { margin:0; padding:12px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:#121212; color:#fff; }
+    h2 { margin:0 0 8px; font-size:1.1rem; text-align:center; }
+    .wrap { max-width:1024px; margin:0 auto; }
+    .card { background:#1e1e1e; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.25); padding:12px; }
+    .muted { opacity:0.85; }
+    .grid { display:grid; grid-template-columns: repeat(5, max-content); gap:8px; align-items:center; justify-content:center; margin:8px 0; }
+    input { padding:8px 10px; background:#1a1a1a; border:1px solid #333; color:#fff; border-radius:6px; }
+    .btn { padding:8px 10px; background:#2a2a2a; border:1px solid #3a3a3a; color:#fff; border-radius:6px; cursor:pointer; }
     .btn:hover { background:#333; }
-    table { width:100%; border-collapse: collapse; }
-    th, td { padding: 6px; border-bottom: 1px solid #2a2a2a; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:6px; border-bottom:1px solid #2a2a2a; }
     tr:hover { background:#161616; }
     .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#222; border:1px solid #333; font-size:12px; }
-    .toprow { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom: 6px; }
+    .toprow { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:6px; }
   </style>
 </head>
 <body>
@@ -30,14 +28,17 @@
     <div class="card">
       <div class="toprow">
         <h2>Shared watchlist</h2>
-        <div id="authStatus" class="muted">Not signed in</div>
+        <div>
+          <span id="authStatus" class="muted">Not signed in</span>
+          <button id="btnAccount" class="btn" style="margin-left:8px;">Account</button>
+        </div>
       </div>
 
       <form id="watchlistForm" class="grid" style="display:none;">
         <input id="wlTicker" type="text" placeholder="Ticker, for example AAPL" inputmode="latin" />
         <input id="wlCost" type="number" step="0.0001" min="0" placeholder="Cost price, for example 123.45" />
         <button id="wlAdd" type="submit" class="btn">Add</button>
-        <span id="wlHint" class="muted" style="align-self:center;">Signed in can add, everyone can view</span>
+        <span class="muted" style="align-self:center;">Signed in can add, everyone can view</span>
       </form>
 
       <div style="overflow:auto;">
@@ -60,48 +61,61 @@
   </div>
 
   <script>
-    // Supabase config
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-    });
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
 
-    // Elements
     const authStatus = document.getElementById('authStatus');
     const wlForm = document.getElementById('watchlistForm');
     const wlTicker = document.getElementById('wlTicker');
     const wlCost = document.getElementById('wlCost');
     const wlAddBtn = document.getElementById('wlAdd');
     const wlBody = document.getElementById('watchlistBody');
+    const btnAccount = document.getElementById('btnAccount');
 
     let currentUser = null;
 
-    // Parent resize helper
+    // account button opens login card in parent
+    btnAccount.addEventListener('click', () => {
+      window.parent && window.parent.postMessage({ type:'openLogin' }, '*');
+    });
+
+    // parent can ask us to refresh auth
+    window.addEventListener('message', async evt => {
+      const data = evt.data || {};
+      if (data.type === 'forceAuthRefresh') {
+        await refreshAuthUI();
+        await loadWatchlist();
+        postHeight();
+      }
+    });
+
+    // height to parent
     function postHeight() {
       const h = document.documentElement.scrollHeight || document.body.scrollHeight || 600;
-      window.parent && window.parent.postMessage({ type: 'watchlistHeight', height: h }, '*');
+      window.parent && window.parent.postMessage({ type:'watchlistHeight', height:h }, '*');
     }
-    const ro = new ResizeObserver(() => postHeight());
-    ro.observe(document.body);
+    if ('ResizeObserver' in window) new ResizeObserver(postHeight).observe(document.body);
     window.addEventListener('load', postHeight);
 
-    // Auth UI
     async function refreshAuthUI() {
       const { data: { session } } = await supabase.auth.getSession();
       currentUser = session ? session.user : null;
       authStatus.textContent = currentUser ? `Signed in as ${currentUser.email}` : 'Not signed in';
       wlForm.style.display = currentUser ? 'grid' : 'none';
+
+      if (!currentUser) {
+        // tell parent we need login if someone hit this page while signed out
+        window.parent && window.parent.postMessage({ type:'auth', status:'signedOut' }, '*');
+      }
       postHeight();
     }
-    supabase.auth.onAuthStateChange(() => refreshAuthUI());
 
-    // Data
     async function loadWatchlist() {
       const { data, error } = await supabase
         .from('watchlist')
         .select('id, created_at, ticker, cost_price, added_by, added_by_email')
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending:false })
         .limit(200);
 
       if (error) {
@@ -122,7 +136,7 @@
         const canDelete = currentUser && currentUser.id === r.added_by;
         const who = r.added_by_email || 'member';
         const when = new Date(r.created_at).toLocaleString();
-        const price = Number(r.cost_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+        const price = Number(r.cost_price).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:6 });
         const delBtn = canDelete
           ? `<button class="btn" data-del="${r.id}" style="padding:4px 8px;">Delete</button>`
           : `<span class="pill">View</span>`;
@@ -152,40 +166,34 @@
     async function addWatchlistItem(evt) {
       evt.preventDefault();
       if (!currentUser) { alert('Please sign in to add items'); return; }
-
       const rawTicker = wlTicker.value.trim().toUpperCase();
       const rawCost = wlCost.value.trim();
       const cost = Number(rawCost);
-
       if (!rawTicker) { alert('Enter a ticker'); return; }
       if (!isFinite(cost) || cost <= 0) { alert('Enter a valid cost price'); return; }
 
       wlAddBtn.disabled = true;
-
       const { data: sessionData } = await supabase.auth.getSession();
       const addedEmail = sessionData && sessionData.session && sessionData.session.user && sessionData.session.user.email;
 
       const { error } = await supabase.from('watchlist').insert({
-        ticker: rawTicker,
-        cost_price: cost,
-        added_by: currentUser.id,
-        added_by_email: addedEmail || null
+        ticker: rawTicker, cost_price: cost, added_by: currentUser.id, added_by_email: addedEmail || null
       });
 
       wlAddBtn.disabled = false;
       if (error) { alert(error.message); return; }
-      wlTicker.value = '';
-      wlCost.value = '';
+      wlTicker.value = ''; wlCost.value = '';
     }
 
     wlForm.addEventListener('submit', addWatchlistItem);
 
+    // realtime updates
     const wlChannel = supabase
       .channel('public:watchlist')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist' }, () => loadWatchlist())
+      .on('postgres_changes', { event:'*', schema:'public', table:'watchlist' }, () => loadWatchlist())
       .subscribe();
 
-    // Init
+    // init
     (async function init() {
       await refreshAuthUI();
       await loadWatchlist();
@@ -194,3 +202,4 @@
   </script>
 </body>
 </html>
+
