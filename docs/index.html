@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Winnerland!</title>
+</head>
+<body>
+  <p>Redirecting...</p>
+  <script type="module" src="auth.js"></script>
+  <script type="module">
+    const { getSession } = window.__auth__;
+
+    (async () => {
+      const session = await getSession();
+      if (session) {
+        window.location.href = "members.html";
+      } else {
+        window.location.href = "signin.html";
+      }
+    })();
+  </script>
+</body>
+</html>
