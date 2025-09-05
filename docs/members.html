@@ -1,439 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Winnerland Members</title>
 
-  <!-- Chart.js and PapaParse -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 
   <style>
     :root { color-scheme: dark; }
-    body { margin:0; padding:1rem; font-family: system-ui, sans-serif; background:#121212; color:#fff; }
-    header { display:flex; gap:.75rem; align-items:center; justify-content:space-between; margin-bottom:.75rem; }
-    .brand { display:flex; align-items:center; gap:.5rem; }
-    .tools { display:flex; flex-wrap: wrap; gap:.5rem; align-items:center; }
-    .tools > * { background:#1e1e1e; border:1px solid #2a2a2a; color:#fff; padding:.5rem .65rem; border-radius:8px; }
-    .tools input, .tools select { border:1px solid #2a2a2a; background:#141414; color:#fff; padding:.45rem .55rem; border-radius:8px; min-width:7ch; }
-    button.primary { background:#2d7df6; border:0; }
-    button.danger { background:#c23c3c; border:0; }
-    .dashboard {
-      display:grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 1rem;
-      margin-top:.75rem;
-    }
-    .card {
-      background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:1rem; display:flex; flex-direction:column;
-    }
-    .card h2 { margin:0 0 .5rem; text-align:center; font-size:1.05rem; }
-    .chart-container { position:relative; height:200px; }
+    body { margin:0; padding:0; background:#121212; color:#fff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; position:sticky; top:0; backdrop-filter: blur(6px); background:rgba(18,18,18,.85); border-bottom:1px solid #222; z-index:10; }
+    header .left { display:flex; align-items:center; gap:10px; }
+    header h1 { font-size:1.15rem; margin:0; }
+    header .right { display:flex; align-items:center; gap:10px; }
+    .btn { padding:.55rem .8rem; border-radius:10px; border:1px solid #333; background:#1e1e1e; color:#fff; cursor:pointer; }
+    .btn:hover { background:#252525; }
+    .accent { border-color:#3b82f6; }
+    .danger { border-color:#ef4444; }
+    .tag { font-size:.85rem; color:#bdbdbd; }
+    main { padding:16px; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-bottom:.75rem; }
+    .toolbar input, .toolbar select { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.5rem .65rem; }
+    .dashboard { display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-top:.75rem; }
+    .chart-card { background:#1e1e1e; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,.25); padding:1rem; display:flex; flex-direction:column; border: 3px solid transparent; }
+    .chart-card h2 { margin:0 0 .5rem; font-size:1.05rem; text-align:center; color:#fff; }
+    .chart-container { position:relative; flex:1; height: 220px; }
     .chart-container canvas { width:100% !important; height:100% !important; }
-    .border-green { border:2px solid #28a745; }
-    .border-red { border:2px solid #dc3545; }
-    .notes { white-space: pre-wrap; min-height: 80px; }
-    .muted { opacity:.75; font-size:.95rem; }
-    .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    .footnote { color:#9aa0a6; font-size:.85rem; text-align:center; margin-top:.75rem; }
+    .row { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
   </style>
 </head>
 <body>
   <header>
-    <div class="brand">
-      <h1 style="margin:0;">Winnerland, Members</h1>
-      <span class="muted" id="userEmail"></span>
+    <div class="left">
+      <h1>Winnerland Members</h1>
+      <span class="tag" id="userTag"></span>
     </div>
-    <div class="tools">
-      <label>Per member divisor
-        <input type="number" id="divisor" value="14" min="1" step="1" />
+    <div class="right">
+      <button class="btn" id="btnExportPNGs">Export charts as PNG</button>
+      <button class="btn accent" id="btnRefresh">Refresh</button>
+      <button class="btn danger" id="btnSignOut">Sign out</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <label class="row">
+        <span>Member count</span>
+        <input id="memberCount" type="number" min="1" value="1" />
       </label>
-      <label>Min holding NZD
-        <input type="number" id="minHolding" value="0" min="0" step="50" />
+      <label class="row">
+        <span>Filter ticker</span>
+        <input id="filterTicker" type="text" placeholder="For example AAPL" />
       </label>
-      <label>Percent line
-        <select id="pctToggle">
+      <label class="row">
+        <span>Hide NZD below</span>
+        <input id="minNZD" type="number" min="0" step="1" value="0" />
+      </label>
+      <label class="row">
+        <span>Show percent line</span>
+        <select id="pctMode">
           <option value="on" selected>On</option>
           <option value="off">Off</option>
         </select>
       </label>
-      <button id="exportCsv">Export CSV</button>
-      <button id="refreshBtn">Refresh</button>
-      <button class="danger" id="signOut">Sign out</button>
     </div>
-  </header>
 
-  <div class="row muted">
-    <span id="status">Loading data...</span>
-  </div>
+    <div class="dashboard" id="dashboard"></div>
+    <p class="footnote">Your charts are private to your account. Change the member count to show per person values.</p>
+  </main>
 
-  <section class="dashboard" id="dashboard"></section>
+  <script src="app.js"></script>
+  <script>
+    const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  <!-- Shared auth -->
-  <script type="module" src="auth.js"></script>
-  <script type="module">
-    const { requireAuthOrRedirect, supabase, signOutAndGoHome } = window.__auth__;
-
-    // ====== config ======
-    const csvUrl =
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv";
-
-    // ====== state ======
-    let rawRows = [];
-    let portfolioData = [];
-    let charts = [];
-
-    // ====== auth gate ======
-    const session = await requireAuthOrRedirect();
-    document.getElementById("userEmail").textContent = session.user?.email || "";
-
-    // ====== UI hooks ======
-    const divisorEl = document.getElementById("divisor");
-    const minHoldingEl = document.getElementById("minHolding");
-    const pctToggleEl = document.getElementById("pctToggle");
-    const statusEl = document.getElementById("status");
-    const exportBtn = document.getElementById("exportCsv");
-    const refreshBtn = document.getElementById("refreshBtn");
-    const signOutBtn = document.getElementById("signOut");
-    const dashboard = document.getElementById("dashboard");
-
-    // Persist a couple of preferences locally
-    const prefsKey = "wl_prefs_v1";
-    function loadPrefs() {
-      try {
-        const p = JSON.parse(localStorage.getItem(prefsKey) || "{}");
-        if (p.divisor) divisorEl.value = p.divisor;
-        if (typeof p.minHolding === "number") minHoldingEl.value = p.minHolding;
-        if (p.pctToggle) pctToggleEl.value = p.pctToggle;
-      } catch {}
+    async function guard() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { location.href = "login.html"; return; }
+      const { data: { user } } = await supabase.auth.getUser();
+      document.getElementById("userTag").textContent = user && user.email ? "(" + user.email + ")" : "";
     }
-    function savePrefs() {
-      const p = {
-        divisor: Number(divisorEl.value),
-        minHolding: Number(minHoldingEl.value),
-        pctToggle: pctToggleEl.value
-      };
-      localStorage.setItem(prefsKey, JSON.stringify(p));
-    }
-    loadPrefs();
 
-    divisorEl.addEventListener("change", () => { savePrefs(); render(); });
-    minHoldingEl.addEventListener("change", () => { savePrefs(); render(); });
-    pctToggleEl.addEventListener("change", () => { savePrefs(); render(); });
+    guard();
 
-    exportBtn.addEventListener("click", () => {
-      const csv = Papa.unparse(currentExportRows());
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "winnerland-holdings.csv";
-      a.click();
-      URL.revokeObjectURL(url);
+    supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) location.href = "login.html";
     });
 
-    refreshBtn.addEventListener("click", () => loadData(true));
-    signOutBtn.addEventListener("click", signOutAndGoHome);
+    document.getElementById("btnSignOut").addEventListener("click", async () => {
+      await supabase.auth.signOut();
+      location.href = "login.html";
+    });
 
-    // ====== data load ======
-    async function loadData(force = false) {
-      statusEl.textContent = "Loading data...";
-      dashboard.innerHTML = "";
-      charts.forEach(ch => ch.destroy?.());
-      charts = [];
-
-      Papa.parse(csvUrl, {
-        download: true,
-        header: true,
-        complete: ({ data }) => {
-          // filter alive rows
-          rawRows = data.filter(r => {
-            const qty = parseFloat(r["QTY"]);
-            const hasTicker = !!r.Ticker;
-            return hasTicker && qty > 0;
-          });
-
-          // portfolio series from M and N
-          portfolioData = data.map(row => {
-            const date = row["M"];
-            const val = parseFloat(row["N"]) || 0;
-            if (!val) return null;
-            return { date, portfolioValue: val };
-          }).filter(Boolean);
-
-          render();
-          statusEl.textContent = "Loaded " + rawRows.length + " holdings.";
-        },
-        error: err => {
-          statusEl.textContent = "CSV load error, " + err.message;
-        }
-      });
-    }
-
-    function currentExportRows() {
-      const f = Number(divisorEl.value) || 1;
-      const minNz = Number(minHoldingEl.value) || 0;
-
-      const rows = [];
-      rawRows.forEach(r => {
-        const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
-        if (mvNzd < minNz) return;
-        const mvUsd = parseFloat((r["Market Value"] || "").replace(/[^\d.-]/g, "")) || 0;
-        const tcUsd = parseFloat((r["Total Cost"] || "").replace(/[^\d.-]/g, "")) || 0;
-        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-        const profitNzd = mvNzd - costNzd;
-
-        rows.push({
-          Ticker: r.Ticker,
-          NZD_per_member: (mvNzd / f).toFixed(2),
-          Cost_NZD_per_member: (costNzd / f).toFixed(2),
-          Profit_NZD_per_member: (profitNzd / f).toFixed(2),
-          Percent_Change: r["% Change"]
-        });
-      });
-      return rows;
-    }
-
-    function render() {
-      dashboard.innerHTML = "";
-      charts.forEach(ch => ch.destroy?.());
-      charts = [];
-
-      const f = Number(divisorEl.value) || 1;
-      const minNz = Number(minHoldingEl.value) || 0;
-      const pctOn = pctToggleEl.value === "on";
-
-      // compute totals across filtered set
-      let totalSpent = 0, totalValue = 0;
-      const filtered = rawRows.filter(r => {
-        const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
-        return mvNzd >= minNz;
-      });
-
-      filtered.forEach(r => {
-        const tcUsd = parseFloat((r["Total Cost"] || "").replace(/[^\d.-]/g, "")) || 0;
-        const mvUsd = parseFloat((r["Market Value"] || "").replace(/[^\d.-]/g, "")) || 0;
-        const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
-        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-        totalSpent += costNzd;
-        totalValue += mvNzd;
-      });
-      const totalProfit = totalValue - totalSpent;
-
-      // Summary cards, pie, bar, line
-      addSummaryCards({ f, filtered, totalSpent, totalValue, totalProfit });
-
-      // One card per holding
-      filtered.forEach(r => addHoldingCard(r, { f, pctOn }));
-    }
-
-    function addSummaryCards({ f, filtered, totalSpent, totalValue, totalProfit }) {
-      // Pie
-      const pieCard = document.createElement("div");
-      pieCard.className = "card";
-      pieCard.innerHTML = `
-        <h2>Allocation ${f > 1 ? "(per member)" : ""}</h2>
-        <div class="chart-container"><canvas id="c_pie"></canvas></div>
-      `;
-      dashboard.appendChild(pieCard);
-
-      // Bar
-      const barCard = document.createElement("div");
-      barCard.className = "card";
-      barCard.innerHTML = `
-        <h2>Portfolio Summary ${f > 1 ? "(per member)" : ""}</h2>
-        <div class="chart-container"><canvas id="c_bar"></canvas></div>
-      `;
-      dashboard.appendChild(barCard);
-
-      // Line
-      const lineCard = document.createElement("div");
-      lineCard.className = "card";
-      lineCard.innerHTML = `
-        <h2>Portfolio Value Over Time</h2>
-        <div class="chart-container"><canvas id="c_line"></canvas></div>
-      `;
-      dashboard.appendChild(lineCard);
-
-      // Build data
-      const pieLabels = filtered.map(r => r.Ticker);
-      const pieData = filtered.map(r => {
-        const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
-        return mvNzd / f;
-      });
-
-      charts.push(new Chart(document.getElementById("c_pie"), {
-        type: "doughnut",
-        data: { labels: pieLabels, datasets: [{ data: pieData }] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { position: "right", labels: { color: "#fff" } } },
-          elements: { arc: { borderWidth: 0 } }
-        }
-      }));
-
-      charts.push(new Chart(document.getElementById("c_bar"), {
-        type: "bar",
-        data: {
-          labels: ["Spent", "Profit", "Value"],
-          datasets: [{
-            label: "NZD",
-            data: [totalSpent / f, totalProfit / f, totalValue / f],
-            backgroundColor: [
-              "rgba(54,162,235,.6)",
-              "rgba(255,205,86,.6)",
-              "rgba(75,192,192,.6)"
-            ]
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: {
-              beginAtZero: true,
-              ticks: { callback: v => "$" + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) },
-              grid: { color: "#444", borderColor: "#444" }
-            },
-            x: { grid: { color: "#444" } }
-          },
-          plugins: { legend: { display: false } }
-        }
-      }));
-
-      const lineLabels = portfolioData.map(p => p.date);
-      const lineVals = portfolioData.map(p => p.portfolioValue);
-      const minV = Math.min(...lineVals);
-      const maxV = Math.max(...lineVals);
-      const margin = (maxV - minV) * 0.1;
-
-      charts.push(new Chart(document.getElementById("c_line"), {
-        type: "line",
-        data: { labels: lineLabels, datasets: [{ label: "Portfolio Value (NZD)", data: lineVals, fill:false, borderColor:"rgba(75,192,192,1)", tension:.1 }] },
-        options: {
-          responsive:true,
-          maintainAspectRatio:false,
-          scales: {
-            y: {
-              min: minV - margin,
-              max: maxV + margin,
-              ticks: { callback: v => "$" + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) },
-              grid: { color:"#444", borderColor:"#444" }
-            },
-            x: { grid: { color:"#444" } }
-          },
-          plugins: { legend: { labels: { color:"#fff" } } }
-        }
-      }));
-    }
-
-    function addHoldingCard(r, { f, pctOn }) {
-      const tcUsd = parseFloat((r["Total Cost"] || "").replace(/[^\d.-]/g, "")) || 0;
-      const mvUsd = parseFloat((r["Market Value"] || "").replace(/[^\d.-]/g, "")) || 0;
-      const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
-      const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-      const profitNzd = mvNzd - costNzd;
-      const pctChange = parseFloat((r["% Change"] || "").replace(/[^\d.-]/g, "")) || 0;
-
-      const card = document.createElement("div");
-      card.className = "card " + (profitNzd >= 0 ? "border-green" : "border-red");
-      const cid = "c_" + r.Ticker.replace(/[^a-z0-9]/gi, "").toLowerCase();
-
-      // simple notes per ticker, stored local only
-      const notesKey = "wl_notes_" + r.Ticker;
-      const saved = localStorage.getItem(notesKey) || "";
-
-      card.innerHTML = `
-        <h2>${r.Ticker}</h2>
-        <div class="chart-container"><canvas id="${cid}"></canvas></div>
-        <div class="row" style="justify-content:space-between; margin-top:.5rem;">
-          <div class="muted">NZD per member, ${f > 1 ? (mvNzd / f).toFixed(2) : mvNzd.toFixed(2)}</div>
-          <div class="muted">${profitNzd >= 0 ? "Profit" : "Loss"} per member, ${(profitNzd / f).toFixed(2)}</div>
-        </div>
-        <div class="row" style="margin-top:.5rem;">
-          <textarea class="notes" placeholder="Notes for ${r.Ticker} (local only)">${saved}</textarea>
-          <button class="primary saveBtn">Save notes</button>
-        </div>
-      `;
-      dashboard.appendChild(card);
-
-      const ctx = document.getElementById(cid);
-      const datasets = [{
-        type: "bar",
-        label: "NZD",
-        data: [costNzd / f, mvNzd / f, (profitNzd / f)],
-        backgroundColor: [
-          "rgba(54,162,235,.6)",
-          "rgba(75,192,192,.6)",
-          "rgba(255,205,86,.6)"
-        ]
-      }];
-
-      if (pctOn) {
-        datasets.push({
-          type: "line",
-          label: "% Change",
-          data: [null, null, null, pctChange],
-          yAxisID: "PCT",
-          borderColor: "rgba(255,99,132,.8)",
-          backgroundColor: "rgba(255,99,132,.4)",
-          tension: .3,
-          pointRadius: 4,
-          fill: false
-        });
-      }
-
-      const chart = new Chart(ctx, {
-        data: {
-          labels: ["Cost", "Value", "Profit", "% Change"],
-          datasets
-        },
-        options: {
-          responsive:true,
-          maintainAspectRatio:false,
-          scales: {
-            y: {
-              beginAtZero:true,
-              title: { display:true, text:"NZD" },
-              ticks: { callback: v => "$" + Number(v).toLocaleString() },
-              grid: { color:"#444" }
-            },
-            PCT: {
-              type:"linear",
-              position:"right",
-              title:{ display:true, text:"% Change" },
-              grid:{ drawOnChartArea:false },
-              ticks:{ callback: v => v + "%" }
-            }
-          },
-          plugins: {
-            tooltip: {
-              callbacks: {
-                label: ctx => {
-                  if (ctx.dataset.type === "line") return "% Change, " + ctx.parsed.y + "%";
-                  return "NZD $" + ctx.parsed.y.toLocaleString();
-                }
-              }
-            },
-            legend: { position: "bottom", labels: { color:"#fff" } }
-          }
-        }
-      });
-      charts.push(chart);
-
-      // notes save
-      const saveBtn = card.querySelector(".saveBtn");
-      const notesEl = card.querySelector(".notes");
-      saveBtn.addEventListener("click", () => {
-        localStorage.setItem(notesKey, notesEl.value);
-        saveBtn.textContent = "Saved";
-        setTimeout(() => saveBtn.textContent = "Save notes", 1200);
-      });
-    }
-
-    // First load
-    loadData();
+    document.getElementById("btnRefresh").addEventListener("click", () => window.WINNERLAND.renderNow());
+    document.getElementById("btnExportPNGs").addEventListener("click", () => window.WINNERLAND.exportPNGs());
+    document.getElementById("memberCount").addEventListener("change", () => window.WINNERLAND.renderNow());
+    document.getElementById("filterTicker").addEventListener("input", () => window.WINNERLAND.renderNow());
+    document.getElementById("minNZD").addEventListener("input", () => window.WINNERLAND.renderNow());
+    document.getElementById("pctMode").addEventListener("change", () => window.WINNERLAND.renderNow());
   </script>
 </body>
 </html>
