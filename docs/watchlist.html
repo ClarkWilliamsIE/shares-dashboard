@@ -22,8 +22,9 @@
     .grid { display:grid; grid-template-columns: 1fr; gap:.75rem; margin-top:1rem; }
     @media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
     .item { display:flex; gap:.75rem; align-items:flex-start; background:#171717; border:1px solid #262626; border-radius:12px; padding:12px; }
-    .scorebox { min-width:84px; text-align:center; border:1px solid #333; border-radius:10px; padding:.35rem .5rem; background:#0f0f0f; }
-    .score { font-size:1.25rem; font-weight:700; }
+    .scorebox { min-width:92px; text-align:center; border:1px solid #333; border-radius:10px; padding:.35rem .5rem; background:#0f0f0f; }
+    .score { font-size:1.05rem; font-weight:700; }
+    .sub { color:#9aa0a6; font-size:.8rem; }
     .ticker { font-weight:700; letter-spacing:.5px; }
     .muted { color:#9aa0a6; font-size:.9rem; }
     .grow { flex:1; }
@@ -36,6 +37,9 @@
     .error { color:#fca5a5; }
     .topbar { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-bottom:.75rem; }
     #err { margin:.5rem 0; color:#fca5a5; display:none; }
+    .pct { font-weight:700; }
+    .pct.up { color:#22c55e; }
+    .pct.down { color:#ef4444; }
   </style>
 </head>
 <body>
@@ -91,12 +95,14 @@
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // Google Apps Script Web App URL
-    const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwXtz0blTsJE_JN-DGa3c6c3TZZKUtakbs57XixYsImkwT0U2VCocRdI82rs7qbCgs8tA/exec";
+    // Must be the latest deployment with the new doGet handler
+    const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby9-PQORBC7L27BItmvRVowsut2KAgcPyJxeDszODyouSxYB59pOf1TrIGm1SLQEIiccQ/exec";
 
     let currentUser = null;
     let items = [];
     let votes = [];
     let myVotes = [];
+    let pctMap = {}; // { TICKER: { pct, price, added, market } }
 
     function showErr(e) {
       console.error(e);
@@ -130,12 +136,33 @@
       votes = votesData || [];
 
       myVotes = votes.filter(v => v.user_id === currentUser.id);
+
+      // Fetch percent data for unique tickers from the sheet
+      const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+      pctMap = {};
+      if (uniqueTickers) {
+        try {
+          const res = await fetch(SHEET_WEBAPP_URL + "?tickers=" + encodeURIComponent(uniqueTickers));
+          const json = await res.json();
+          if (json && json.ok && json.data) pctMap = json.data;
+        } catch (e) {
+          console.warn("Sheet percent fetch failed", e);
+        }
+      }
     }
 
     function computeScores() {
       const m = new Map();
       for (const v of votes) m.set(v.item_id, (m.get(v.item_id) || 0) + (v.value || 0));
       return m;
+    }
+
+    function pctBadge(ticker) {
+      const rec = pctMap[ticker];
+      if (!rec || typeof rec.pct !== "number") return `<div class="sub muted">change n/a</div>`;
+      const pct = rec.pct * 100;
+      const cls = pct >= 0 ? "pct up" : "pct down";
+      return `<div class="${cls}">${pct.toFixed(2)}%</div><div class="sub">now ${rec.price ? Number(rec.price).toFixed(2) : "n/a"}</div>`;
     }
 
     function mergeSorted() {
@@ -163,11 +190,14 @@
         el.innerHTML = `
           <div class="scorebox">
             <div class="score">${it.score}</div>
-            <div class="muted">score</div>
+            <div class="sub">score</div>
           </div>
           <div class="grow">
             <div class="ticker">${it.ticker}</div>
             <div class="muted">${it.notes ? it.notes : ""}</div>
+          </div>
+          <div class="scorebox">
+            ${pctBadge(it.ticker)}
           </div>
           <div class="right">
             <button class="vote up ${it.myVote === 1 ? "active" : ""}" data-id="${it.id}" data-v="1">▲</button>
@@ -213,14 +243,14 @@
       const market = document.getElementById("market").value;
       if (!t) { showMsg("Please enter a ticker", false); return; }
       try {
-        // 1) write to Supabase
         const { error } = await supabase.from("watchlist_items").insert({ ticker: t, notes: n, created_by: currentUser.id });
         if (error) throw error;
 
-        // 2) log to Google Sheet
+        // Log to sheet, no-cors since we do not need the response here
         try {
           await fetch(SHEET_WEBAPP_URL, {
             method: "POST",
+            mode: "no-cors",
             headers: { "Content-Type": "text/plain" },
             body: JSON.stringify({
               email: currentUser.email || "",
@@ -230,9 +260,7 @@
               market
             })
           });
-        } catch(e) {
-          console.warn("Sheet log failed", e);
-        }
+        } catch(e) { console.warn("Sheet log failed", e); }
 
         document.getElementById("ticker").value = "";
         document.getElementById("notes").value = "";
@@ -262,6 +290,20 @@
       await fetchAll();
       renderList();
       setupRealtime();
+
+      // Refresh percent badges every 60 seconds so the live price moves
+      setInterval(async () => {
+        try {
+          const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+          if (!uniqueTickers) return;
+          const res = await fetch(SHEET_WEBAPP_URL + "?tickers=" + encodeURIComponent(uniqueTickers));
+          const json = await res.json();
+          if (json && json.ok && json.data) {
+            pctMap = json.data;
+            renderList();
+          }
+        } catch (_) {}
+      }, 60000);
     }
     init();
   </script>
