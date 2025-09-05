@@ -1,250 +1,439 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Winnerland, Main</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Winnerland Members</title>
 
+  <!-- Chart.js and PapaParse -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     :root { color-scheme: dark; }
-    body { margin: 0; padding: 1rem; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:#121212; color:#fff; }
-    h1 { text-align:center; margin-bottom:0.5rem; }
-    .gate { max-width: 1024px; margin: 1rem auto; }
-    .dashboard { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1rem; margin-top:1rem; }
-    .chart-card { background:#1e1e1e; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.25); padding:1rem; border:3px solid transparent; }
-    .chart-card h2 { margin:0 0 0.5rem; font-size:1.1rem; text-align:center; }
+    body { margin:0; padding:1rem; font-family: system-ui, sans-serif; background:#121212; color:#fff; }
+    header { display:flex; gap:.75rem; align-items:center; justify-content:space-between; margin-bottom:.75rem; }
+    .brand { display:flex; align-items:center; gap:.5rem; }
+    .tools { display:flex; flex-wrap: wrap; gap:.5rem; align-items:center; }
+    .tools > * { background:#1e1e1e; border:1px solid #2a2a2a; color:#fff; padding:.5rem .65rem; border-radius:8px; }
+    .tools input, .tools select { border:1px solid #2a2a2a; background:#141414; color:#fff; padding:.45rem .55rem; border-radius:8px; min-width:7ch; }
+    button.primary { background:#2d7df6; border:0; }
+    button.danger { background:#c23c3c; border:0; }
+    .dashboard {
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-top:.75rem;
+    }
+    .card {
+      background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:1rem; display:flex; flex-direction:column;
+    }
+    .card h2 { margin:0 0 .5rem; text-align:center; font-size:1.05rem; }
     .chart-container { position:relative; height:200px; }
     .chart-container canvas { width:100% !important; height:100% !important; }
-    #log { max-width: 1024px; margin: 1rem auto; background:#0f0f0f; border:1px solid #333; padding:0.5rem 0.75rem; border-radius:8px; white-space:pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
-    .hidden { display:none; }
-    iframe.cardframe { width:100%; border:0; min-height:360px; border-radius:8px; overflow:hidden; }
+    .border-green { border:2px solid #28a745; }
+    .border-red { border:2px solid #dc3545; }
+    .notes { white-space: pre-wrap; min-height: 80px; }
+    .muted { opacity:.75; font-size:.95rem; }
+    .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
   </style>
 </head>
 <body>
-  <h1>Winnerland</h1>
-
-  <!-- Member area shell that swaps between Login card and Watchlist card -->
-  <div class="gate">
-    <div class="chart-card">
-      <h2 id="memberTitle">Member area</h2>
-
-      <iframe
-        id="loginFrame"
-        class="cardframe"
-        src="./login.html"
-        title="Login"
-        loading="lazy"
-        referrerpolicy="same-origin"
-        sandbox="allow-same-origin allow-scripts allow-forms"
-      ></iframe>
-
-      <iframe
-        id="watchlistFrame"
-        class="cardframe hidden"
-        src="./watchlist.html"
-        title="Shared watchlist"
-        loading="lazy"
-        referrerpolicy="same-origin"
-        sandbox="allow-same-origin allow-scripts allow-forms"
-      ></iframe>
+  <header>
+    <div class="brand">
+      <h1 style="margin:0;">Winnerland, Members</h1>
+      <span class="muted" id="userEmail"></span>
     </div>
+    <div class="tools">
+      <label>Per member divisor
+        <input type="number" id="divisor" value="14" min="1" step="1" />
+      </label>
+      <label>Min holding NZD
+        <input type="number" id="minHolding" value="0" min="0" step="50" />
+      </label>
+      <label>Percent line
+        <select id="pctToggle">
+          <option value="on" selected>On</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
+      <button id="exportCsv">Export CSV</button>
+      <button id="refreshBtn">Refresh</button>
+      <button class="danger" id="signOut">Sign out</button>
+    </div>
+  </header>
+
+  <div class="row muted">
+    <span id="status">Loading data...</span>
   </div>
 
-  <!-- Public charts -->
-  <div class="dashboard" id="dashboard"></div>
+  <section class="dashboard" id="dashboard"></section>
 
-  <div id="log">Status, loading...</div>
+  <!-- Shared auth -->
+  <script type="module" src="auth.js"></script>
+  <script type="module">
+    const { requireAuthOrRedirect, supabase, signOutAndGoHome } = window.__auth__;
 
-  <script>
-    /* logger */
-    const logBox = document.getElementById('log');
-    function logLine(msg) { console.log(msg); logBox.textContent += "\\n" + msg; }
-    logBox.textContent = "Status, booting app...";
+    // ====== config ======
+    const csvUrl =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv";
 
-    /* Supabase, read only use to determine session */
-    const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-    });
-
-    const loginFrame = document.getElementById('loginFrame');
-    const watchlistFrame = document.getElementById('watchlistFrame');
-    const memberTitle = document.getElementById('memberTitle');
-
-    function showLoginCard() {
-      memberTitle.textContent = "Member area, please log in";
-      loginFrame.classList.remove('hidden');
-      watchlistFrame.classList.add('hidden');
-      // refresh login UI state
-      loginFrame.src = loginFrame.src;
-    }
-    function showWatchlistCard() {
-      memberTitle.textContent = "Member tools";
-      watchlistFrame.classList.remove('hidden');
-      loginFrame.classList.add('hidden');
-      // ask watchlist to refresh its auth view
-      watchlistFrame.contentWindow && watchlistFrame.contentWindow.postMessage({ type:'forceAuthRefresh' }, '*');
-    }
-
-    /* listen for child messages */
-    window.addEventListener('message', evt => {
-      const data = evt.data || {};
-      if (data.type === 'loginHeight')  loginFrame.style.height = Math.max(360, Number(data.height) || 360) + 'px';
-      if (data.type === 'watchlistHeight') watchlistFrame.style.height = Math.max(360, Number(data.height) || 360) + 'px';
-
-      if (data.type === 'auth' && data.status === 'signedIn') { logLine("Auth message, signed in"); showWatchlistCard(); }
-      if (data.type === 'auth' && data.status === 'signedOut') { logLine("Auth message, signed out"); showLoginCard(); }
-
-      if (data.type === 'openLogin') { showLoginCard(); }
-    }, false);
-
-    /* also react to real auth changes, in case messages fail */
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session && session.user) { showWatchlistCard(); }
-      else { showLoginCard(); }
-    });
-
-    /* initial session check */
-    (async function syncFromSession() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session && session.user) showWatchlistCard(); else showLoginCard();
-      } catch (e) {
-        logLine("Session check error, " + e.message);
-        showLoginCard();
-      }
-    })();
-
-    /* charts */
-    const dashboard = document.getElementById('dashboard');
-    const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQEJMIKmxhiNNEJ8h-sgxpsSAT8ndO5TK0EVCijAoAv4y-cmmU0YSHFUX8mC6gMBouC9k50FVFQLawN/pub?gid=1666283294&single=true&output=csv';
-
+    // ====== state ======
     let rawRows = [];
     let portfolioData = [];
+    let charts = [];
 
-    function numFromCell(val) { if (val == null) return 0; return parseFloat(String(val).replace(/[^\d.-]/g,'')) || 0; }
-    function safeTickerId(t) { return String(t || 'TICKER').replace(/[^A-Za-z0-9_-]/g, '_'); }
-    function buildPortfolioFromHeaders(rows) {
-      let dateKey = null, valueKey = null;
-      const headers = rows.length ? Object.keys(rows[0]) : [];
-      const datePrefs = ['Date','date','M'];
-      const valuePrefs = ['Portfolio Value','portfolio value','Value','N'];
-      for (const k of datePrefs) if (headers.includes(k)) { dateKey = k; break; }
-      for (const k of valuePrefs) if (headers.includes(k)) { valueKey = k; break; }
-      if (!dateKey || !valueKey) return [];
-      return rows.map(r => {
-        const date = r[dateKey];
-        const v = numFromCell(r[valueKey]);
-        if (!date || !isFinite(v) || v <= 0) return null;
-        return { date, portfolioValue: v };
-      }).filter(Boolean);
+    // ====== auth gate ======
+    const session = await requireAuthOrRedirect();
+    document.getElementById("userEmail").textContent = session.user?.email || "";
+
+    // ====== UI hooks ======
+    const divisorEl = document.getElementById("divisor");
+    const minHoldingEl = document.getElementById("minHolding");
+    const pctToggleEl = document.getElementById("pctToggle");
+    const statusEl = document.getElementById("status");
+    const exportBtn = document.getElementById("exportCsv");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const signOutBtn = document.getElementById("signOut");
+    const dashboard = document.getElementById("dashboard");
+
+    // Persist a couple of preferences locally
+    const prefsKey = "wl_prefs_v1";
+    function loadPrefs() {
+      try {
+        const p = JSON.parse(localStorage.getItem(prefsKey) || "{}");
+        if (p.divisor) divisorEl.value = p.divisor;
+        if (typeof p.minHolding === "number") minHoldingEl.value = p.minHolding;
+        if (p.pctToggle) pctToggleEl.value = p.pctToggle;
+      } catch {}
     }
-    function ensureDemoWhenEmpty() {
-      const needDemo = portfolioData.length === 0 && rawRows.length === 0;
-      if (!needDemo) return;
-      logLine("CSV looked empty, using demo data");
-      rawRows = [
-        { Ticker: 'AAPL', 'Total Cost': '1000', 'Market Value': '1200', 'NZD': '2000', '% Change': '20', QTY: '1' },
-        { Ticker: 'MSFT', 'Total Cost': '800', 'Market Value': '900', 'NZD': '1500', '% Change': '12.5', QTY: '1' }
-      ];
-      portfolioData = [
-        { date: '2025-07', portfolioValue: 2600 },
-        { date: '2025-08', portfolioValue: 2950 },
-        { date: '2025-09', portfolioValue: 3100 }
-      ];
+    function savePrefs() {
+      const p = {
+        divisor: Number(divisorEl.value),
+        minHolding: Number(minHoldingEl.value),
+        pctToggle: pctToggleEl.value
+      };
+      localStorage.setItem(prefsKey, JSON.stringify(p));
     }
-    function loadCsvAndRender() {
-      logLine("Loading CSV, " + csvUrl);
+    loadPrefs();
+
+    divisorEl.addEventListener("change", () => { savePrefs(); render(); });
+    minHoldingEl.addEventListener("change", () => { savePrefs(); render(); });
+    pctToggleEl.addEventListener("change", () => { savePrefs(); render(); });
+
+    exportBtn.addEventListener("click", () => {
+      const csv = Papa.unparse(currentExportRows());
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "winnerland-holdings.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    refreshBtn.addEventListener("click", () => loadData(true));
+    signOutBtn.addEventListener("click", signOutAndGoHome);
+
+    // ====== data load ======
+    async function loadData(force = false) {
+      statusEl.textContent = "Loading data...";
+      dashboard.innerHTML = "";
+      charts.forEach(ch => ch.destroy?.());
+      charts = [];
+
       Papa.parse(csvUrl, {
-        download: true, header: true, skipEmptyLines: true,
+        download: true,
+        header: true,
         complete: ({ data }) => {
-          try {
-            const rows = Array.isArray(data) ? data : [];
-            rawRows = rows.filter(r => numFromCell(r['QTY']) > 0 && r['Ticker']);
-            portfolioData = buildPortfolioFromHeaders(rows);
-            ensureDemoWhenEmpty();
-            logLine("CSV parsed, holdings " + rawRows.length + ", points " + portfolioData.length);
-            renderCharts();
-          } catch (e) { logLine("Parse error, " + e.message); ensureDemoWhenEmpty(); renderCharts(); }
+          // filter alive rows
+          rawRows = data.filter(r => {
+            const qty = parseFloat(r["QTY"]);
+            const hasTicker = !!r.Ticker;
+            return hasTicker && qty > 0;
+          });
+
+          // portfolio series from M and N
+          portfolioData = data.map(row => {
+            const date = row["M"];
+            const val = parseFloat(row["N"]) || 0;
+            if (!val) return null;
+            return { date, portfolioValue: val };
+          }).filter(Boolean);
+
+          render();
+          statusEl.textContent = "Loaded " + rawRows.length + " holdings.";
         },
-        error: err => { logLine("CSV load error, " + err); ensureDemoWhenEmpty(); renderCharts(); }
+        error: err => {
+          statusEl.textContent = "CSV load error, " + err.message;
+        }
       });
     }
-    function renderCharts() {
-      dashboard.innerHTML = '';
 
-      let totalSpent = 0, totalValue = 0;
+    function currentExportRows() {
+      const f = Number(divisorEl.value) || 1;
+      const minNz = Number(minHoldingEl.value) || 0;
+
+      const rows = [];
       rawRows.forEach(r => {
-        const tcUsd = numFromCell(r['Total Cost']);
-        const mvUsd = numFromCell(r['Market Value']);
-        const mvNzd = numFromCell(r['NZD']);
+        const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
+        if (mvNzd < minNz) return;
+        const mvUsd = parseFloat((r["Market Value"] || "").replace(/[^\d.-]/g, "")) || 0;
+        const tcUsd = parseFloat((r["Total Cost"] || "").replace(/[^\d.-]/g, "")) || 0;
         const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
-        totalSpent += costNzd; totalValue += mvNzd;
+        const profitNzd = mvNzd - costNzd;
+
+        rows.push({
+          Ticker: r.Ticker,
+          NZD_per_member: (mvNzd / f).toFixed(2),
+          Cost_NZD_per_member: (costNzd / f).toFixed(2),
+          Profit_NZD_per_member: (profitNzd / f).toFixed(2),
+          Percent_Change: r["% Change"]
+        });
+      });
+      return rows;
+    }
+
+    function render() {
+      dashboard.innerHTML = "";
+      charts.forEach(ch => ch.destroy?.());
+      charts = [];
+
+      const f = Number(divisorEl.value) || 1;
+      const minNz = Number(minHoldingEl.value) || 0;
+      const pctOn = pctToggleEl.value === "on";
+
+      // compute totals across filtered set
+      let totalSpent = 0, totalValue = 0;
+      const filtered = rawRows.filter(r => {
+        const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
+        return mvNzd >= minNz;
+      });
+
+      filtered.forEach(r => {
+        const tcUsd = parseFloat((r["Total Cost"] || "").replace(/[^\d.-]/g, "")) || 0;
+        const mvUsd = parseFloat((r["Market Value"] || "").replace(/[^\d.-]/g, "")) || 0;
+        const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
+        const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
+        totalSpent += costNzd;
+        totalValue += mvNzd;
       });
       const totalProfit = totalValue - totalSpent;
 
-      const pieCard = document.createElement('div');
-      pieCard.className = 'chart-card';
-      pieCard.innerHTML = `<h2>Allocation</h2><div class="chart-container"><canvas id="summaryPie"></canvas></div>`;
-      dashboard.appendChild(pieCard);
+      // Summary cards, pie, bar, line
+      addSummaryCards({ f, filtered, totalSpent, totalValue, totalProfit });
 
-      const barCard = document.createElement('div');
-      barCard.className = 'chart-card';
-      barCard.innerHTML = `<h2>Portfolio Summary</h2><div class="chart-container"><canvas id="summaryBar"></canvas></div>`;
-      dashboard.appendChild(barCard);
-
-      const lineCard = document.createElement('div');
-      lineCard.className = 'chart-card';
-      lineCard.innerHTML = `<h2>Portfolio Value Over Time</h2><div class="chart-container"><canvas id="portfolioValueLine"></canvas></div>`;
-      dashboard.appendChild(lineCard);
-
-      try {
-        const lineLabels = portfolioData.map(r => r.date);
-        const lineVals = portfolioData.map(r => r.portfolioValue);
-        if (lineVals.length) {
-          const minValue = Math.min.apply(null, lineVals);
-          const maxValue = Math.max.apply(null, lineVals);
-          const margin = Math.max(1, (maxValue - minValue) * 0.1);
-          new Chart(document.getElementById('portfolioValueLine'), {
-            type: 'line',
-            data: { labels: lineLabels, datasets: [{ label: 'Portfolio Value (NZD)', data: lineVals, fill:false, borderColor:'rgba(75,192,192,1)', tension:0.1 }] },
-            options: {
-              responsive:true, maintainAspectRatio:false,
-              scales: {
-                y: { min:minValue - margin, max:maxValue + margin, ticks:{ callback:v => '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits:2 }) }, grid:{ color:'#444' } },
-                x: { grid:{ color:'#444' } }
-              },
-              plugins: { legend: { labels: { color:'#fff' } } }
-            }
-          });
-        }
-      } catch (e) { logLine("Line chart error, " + e.message); }
-
-      try {
-        const pieLabels = rawRows.length ? rawRows.map(r => r.Ticker) : ['None'];
-        const pieData = rawRows.length ? rawRows.map(r => numFromCell(r['NZD'])) : [1];
-        new Chart(document.getElementById('summaryPie'), {
-          type: 'doughnut',
-          data: { labels: pieLabels, datasets: [{ data: pieData }] },
-          options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ color:'#fff' } } }, elements:{ arc:{ borderWidth:0 } } }
-        });
-      } catch (e) { logLine("Pie chart error, " + e.message); }
-
-      try {
-        new Chart(document.getElementById('summaryBar'), {
-          type: 'bar',
-          data: { labels: ['Spent','Profit','Value'], datasets: [{ label:'NZD', data:[totalSpent, totalProfit, totalValue], backgroundColor:['rgba(54,162,235,0.6)','rgba(255,205,86,0.6)','rgba(75,192,192,0.6)'] }] },
-          options: { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, ticks:{ callback:v => '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits:2 }) }, grid:{ color:'#444' } }, x:{ grid:{ color:'#444' } } }, plugins:{ legend:{ display:false } } }
-        });
-      } catch (e) { logLine("Bar chart error, " + e.message); }
+      // One card per holding
+      filtered.forEach(r => addHoldingCard(r, { f, pctOn }));
     }
 
-    loadCsvAndRender();
+    function addSummaryCards({ f, filtered, totalSpent, totalValue, totalProfit }) {
+      // Pie
+      const pieCard = document.createElement("div");
+      pieCard.className = "card";
+      pieCard.innerHTML = `
+        <h2>Allocation ${f > 1 ? "(per member)" : ""}</h2>
+        <div class="chart-container"><canvas id="c_pie"></canvas></div>
+      `;
+      dashboard.appendChild(pieCard);
+
+      // Bar
+      const barCard = document.createElement("div");
+      barCard.className = "card";
+      barCard.innerHTML = `
+        <h2>Portfolio Summary ${f > 1 ? "(per member)" : ""}</h2>
+        <div class="chart-container"><canvas id="c_bar"></canvas></div>
+      `;
+      dashboard.appendChild(barCard);
+
+      // Line
+      const lineCard = document.createElement("div");
+      lineCard.className = "card";
+      lineCard.innerHTML = `
+        <h2>Portfolio Value Over Time</h2>
+        <div class="chart-container"><canvas id="c_line"></canvas></div>
+      `;
+      dashboard.appendChild(lineCard);
+
+      // Build data
+      const pieLabels = filtered.map(r => r.Ticker);
+      const pieData = filtered.map(r => {
+        const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
+        return mvNzd / f;
+      });
+
+      charts.push(new Chart(document.getElementById("c_pie"), {
+        type: "doughnut",
+        data: { labels: pieLabels, datasets: [{ data: pieData }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: "right", labels: { color: "#fff" } } },
+          elements: { arc: { borderWidth: 0 } }
+        }
+      }));
+
+      charts.push(new Chart(document.getElementById("c_bar"), {
+        type: "bar",
+        data: {
+          labels: ["Spent", "Profit", "Value"],
+          datasets: [{
+            label: "NZD",
+            data: [totalSpent / f, totalProfit / f, totalValue / f],
+            backgroundColor: [
+              "rgba(54,162,235,.6)",
+              "rgba(255,205,86,.6)",
+              "rgba(75,192,192,.6)"
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { callback: v => "$" + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) },
+              grid: { color: "#444", borderColor: "#444" }
+            },
+            x: { grid: { color: "#444" } }
+          },
+          plugins: { legend: { display: false } }
+        }
+      }));
+
+      const lineLabels = portfolioData.map(p => p.date);
+      const lineVals = portfolioData.map(p => p.portfolioValue);
+      const minV = Math.min(...lineVals);
+      const maxV = Math.max(...lineVals);
+      const margin = (maxV - minV) * 0.1;
+
+      charts.push(new Chart(document.getElementById("c_line"), {
+        type: "line",
+        data: { labels: lineLabels, datasets: [{ label: "Portfolio Value (NZD)", data: lineVals, fill:false, borderColor:"rgba(75,192,192,1)", tension:.1 }] },
+        options: {
+          responsive:true,
+          maintainAspectRatio:false,
+          scales: {
+            y: {
+              min: minV - margin,
+              max: maxV + margin,
+              ticks: { callback: v => "$" + v.toLocaleString(undefined, { minimumFractionDigits: 2 }) },
+              grid: { color:"#444", borderColor:"#444" }
+            },
+            x: { grid: { color:"#444" } }
+          },
+          plugins: { legend: { labels: { color:"#fff" } } }
+        }
+      }));
+    }
+
+    function addHoldingCard(r, { f, pctOn }) {
+      const tcUsd = parseFloat((r["Total Cost"] || "").replace(/[^\d.-]/g, "")) || 0;
+      const mvUsd = parseFloat((r["Market Value"] || "").replace(/[^\d.-]/g, "")) || 0;
+      const mvNzd = parseFloat((r["NZD"] || "").replace(/[^\d.-]/g, "")) || 0;
+      const costNzd = mvUsd ? tcUsd * (mvNzd / mvUsd) : 0;
+      const profitNzd = mvNzd - costNzd;
+      const pctChange = parseFloat((r["% Change"] || "").replace(/[^\d.-]/g, "")) || 0;
+
+      const card = document.createElement("div");
+      card.className = "card " + (profitNzd >= 0 ? "border-green" : "border-red");
+      const cid = "c_" + r.Ticker.replace(/[^a-z0-9]/gi, "").toLowerCase();
+
+      // simple notes per ticker, stored local only
+      const notesKey = "wl_notes_" + r.Ticker;
+      const saved = localStorage.getItem(notesKey) || "";
+
+      card.innerHTML = `
+        <h2>${r.Ticker}</h2>
+        <div class="chart-container"><canvas id="${cid}"></canvas></div>
+        <div class="row" style="justify-content:space-between; margin-top:.5rem;">
+          <div class="muted">NZD per member, ${f > 1 ? (mvNzd / f).toFixed(2) : mvNzd.toFixed(2)}</div>
+          <div class="muted">${profitNzd >= 0 ? "Profit" : "Loss"} per member, ${(profitNzd / f).toFixed(2)}</div>
+        </div>
+        <div class="row" style="margin-top:.5rem;">
+          <textarea class="notes" placeholder="Notes for ${r.Ticker} (local only)">${saved}</textarea>
+          <button class="primary saveBtn">Save notes</button>
+        </div>
+      `;
+      dashboard.appendChild(card);
+
+      const ctx = document.getElementById(cid);
+      const datasets = [{
+        type: "bar",
+        label: "NZD",
+        data: [costNzd / f, mvNzd / f, (profitNzd / f)],
+        backgroundColor: [
+          "rgba(54,162,235,.6)",
+          "rgba(75,192,192,.6)",
+          "rgba(255,205,86,.6)"
+        ]
+      }];
+
+      if (pctOn) {
+        datasets.push({
+          type: "line",
+          label: "% Change",
+          data: [null, null, null, pctChange],
+          yAxisID: "PCT",
+          borderColor: "rgba(255,99,132,.8)",
+          backgroundColor: "rgba(255,99,132,.4)",
+          tension: .3,
+          pointRadius: 4,
+          fill: false
+        });
+      }
+
+      const chart = new Chart(ctx, {
+        data: {
+          labels: ["Cost", "Value", "Profit", "% Change"],
+          datasets
+        },
+        options: {
+          responsive:true,
+          maintainAspectRatio:false,
+          scales: {
+            y: {
+              beginAtZero:true,
+              title: { display:true, text:"NZD" },
+              ticks: { callback: v => "$" + Number(v).toLocaleString() },
+              grid: { color:"#444" }
+            },
+            PCT: {
+              type:"linear",
+              position:"right",
+              title:{ display:true, text:"% Change" },
+              grid:{ drawOnChartArea:false },
+              ticks:{ callback: v => v + "%" }
+            }
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  if (ctx.dataset.type === "line") return "% Change, " + ctx.parsed.y + "%";
+                  return "NZD $" + ctx.parsed.y.toLocaleString();
+                }
+              }
+            },
+            legend: { position: "bottom", labels: { color:"#fff" } }
+          }
+        }
+      });
+      charts.push(chart);
+
+      // notes save
+      const saveBtn = card.querySelector(".saveBtn");
+      const notesEl = card.querySelector(".notes");
+      saveBtn.addEventListener("click", () => {
+        localStorage.setItem(notesKey, notesEl.value);
+        saveBtn.textContent = "Saved";
+        setTimeout(() => saveBtn.textContent = "Save notes", 1200);
+      });
+    }
+
+    // First load
+    loadData();
   </script>
 </body>
 </html>
