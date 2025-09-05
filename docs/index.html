@@ -3,30 +3,22 @@
 <head>
   <meta charset="utf-8">
   <title>Winnerland Redirect</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
 </head>
-<body>
-  <p style="color:white; background:#121212; font-family:sans-serif; padding:1rem;">
-    Redirecting, please wait...
-  </p>
+<body style="background:#121212; color:#fff; font-family:sans-serif;">
+  <p style="padding:1rem;">Redirecting, please wait...</p>
 
-  <!-- Include auth.js so Supabase is available -->
-  <script type="module" src="auth.js"></script>
   <script type="module">
-    const { getSession } = window.__auth__;
+    import { getSession } from "./auth.js";
 
     (async () => {
       try {
         const session = await getSession();
-        if (session) {
-          // already signed in → send to members dashboard
-          window.location.replace("members.html");
-        } else {
-          // not signed in → send to sign in page
-          window.location.replace("signin.html");
-        }
+        const target = session ? "members.html" : "signin.html";
+        // GitHub Pages often serves under /repo/, so use a relative path
+        window.location.replace(target);
       } catch (e) {
         console.error("Redirect error", e);
-        // fallback if something fails
         window.location.replace("signin.html");
       }
     })();
