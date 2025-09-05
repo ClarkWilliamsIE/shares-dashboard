@@ -14,7 +14,7 @@
     main { padding:16px; max-width:960px; margin:0 auto; }
     .card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
     .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
-    .row input { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
+    .row input, .row select { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
     .btn { padding:.55rem .8rem; border-radius:10px; border:1px solid #333; background:#1f2937; color:#fff; cursor:pointer; }
     .btn:hover { background:#273244; }
     .btn-cta { background:#2563eb; border-color:#2563eb; }
@@ -52,6 +52,19 @@
       <div class="topbar">
         <div class="row" style="flex:1;">
           <input id="ticker" placeholder="Ticker, for example AAPL" />
+          <select id="market" aria-label="Market">
+            <option value="AUTO" selected>Market, auto</option>
+            <option value="NASDAQ">NASDAQ</option>
+            <option value="NYSE">NYSE</option>
+            <option value="NZE">NZX</option>
+            <option value="ASX">ASX</option>
+            <option value="LON">LSE</option>
+            <option value="TSE">TSX</option>
+            <option value="CVE">TSX Venture</option>
+            <option value="AMS">Euronext Amsterdam</option>
+            <option value="EPA">Euronext Paris</option>
+            <option value="FRA">Frankfurt</option>
+          </select>
           <input id="notes" placeholder="Notes, for example why this is interesting" style="flex:1;" />
         </div>
         <button class="btn btn-cta" id="addBtn">Add to watchlist</button>
@@ -78,12 +91,11 @@
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // Google Apps Script Web App URL
-    // Use text/plain to avoid preflight, then parse JSON on the Apps Script side
     const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxxJKwTe82Td-rMyyJl5FkNMvuVIv30YodBfs3Unz7FtWriXZ__spA2yTkuWvDkYYg0kQ/exec";
 
     let currentUser = null;
     let items = [];
-    let votes = []; // raw votes (item_id, user_id, value)
+    let votes = [];
     let myVotes = [];
 
     function showErr(e) {
@@ -104,7 +116,6 @@
     }
 
     async function fetchAll() {
-      // Items
       const { data: itemsData, error: itemsErr } = await supabase
         .from("watchlist_items")
         .select("id, ticker, notes, created_at, created_by")
@@ -112,22 +123,18 @@
       if (itemsErr) throw itemsErr;
       items = itemsData || [];
 
-      // Votes, fetch raw values, compute scores on client
       const { data: votesData, error: votesErr } = await supabase
         .from("watchlist_votes")
         .select("item_id, user_id, value");
       if (votesErr) throw votesErr;
       votes = votesData || [];
 
-      // My votes, quick lookup
       myVotes = votes.filter(v => v.user_id === currentUser.id);
     }
 
     function computeScores() {
       const m = new Map();
-      for (const v of votes) {
-        m.set(v.item_id, (m.get(v.item_id) || 0) + (v.value || 0));
-      }
+      for (const v of votes) m.set(v.item_id, (m.get(v.item_id) || 0) + (v.value || 0));
       return m;
     }
 
@@ -203,13 +210,14 @@
     async function addItem() {
       const t = document.getElementById("ticker").value.trim().toUpperCase();
       const n = document.getElementById("notes").value.trim();
+      const market = document.getElementById("market").value;
       if (!t) { showMsg("Please enter a ticker", false); return; }
       try {
         // 1) write to Supabase
         const { error } = await supabase.from("watchlist_items").insert({ ticker: t, notes: n, created_by: currentUser.id });
         if (error) throw error;
 
-        // 2) log to Google Sheet (text/plain avoids CORS preflight)
+        // 2) log to Google Sheet
         try {
           await fetch(SHEET_WEBAPP_URL, {
             method: "POST",
@@ -218,7 +226,8 @@
               email: currentUser.email || "",
               user_id: currentUser.id,
               ticker: t,
-              notes: n
+              notes: n,
+              market
             })
           });
         } catch(e) {
@@ -227,6 +236,7 @@
 
         document.getElementById("ticker").value = "";
         document.getElementById("notes").value = "";
+        document.getElementById("market").value = "AUTO";
         showMsg("Added");
         await fetchAll();
         renderList();
@@ -238,12 +248,8 @@
 
     function setupRealtime() {
       const channel = supabase.channel("watchlist_changes");
-      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => {
-        await fetchAll(); renderList();
-      });
-      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_votes" }, async () => {
-        await fetchAll(); renderList();
-      });
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => { await fetchAll(); renderList(); });
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_votes" }, async () => { await fetchAll(); renderList(); });
       channel.subscribe();
     }
 
@@ -261,4 +267,5 @@
   </script>
 </body>
 </html>
+
 
