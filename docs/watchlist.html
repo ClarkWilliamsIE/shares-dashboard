@@ -89,10 +89,10 @@
 
   <script>
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI"; // keep yours
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby9-PQORBC7L27BItmvRVowsut2KAgcPyJxeDszODyouSxYB59pOf1TrIGm1SLQEIiccQ/exec";
+    const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxxJKwTe82Td-rMyyJl5FkNMvuVIv30YodBfs3Unz7FtWriXZ__spA2yTkuWvDkYYg0kQ/exec";
 
     let currentUser = null;
     let items = [];
@@ -100,7 +100,15 @@
     let myVotes = [];
     let pctMap = {};
 
-    // JSONP loader
+    function showErr(e) {
+      console.error(e);
+      const box = document.getElementById("err");
+      box.textContent = typeof e === "string" ? e : (e && e.message) ? e.message : "Something went wrong";
+      box.style.display = "block";
+      setTimeout(() => { box.style.display = "none"; }, 4000);
+    }
+
+    // JSONP loader for sheet percents
     function loadPctJSONP(tickers, cbName = "WL_PCT_CB") {
       return new Promise(resolve => {
         if (window[cbName]) delete window[cbName];
@@ -118,27 +126,36 @@
     }
 
     async function guard() {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) { showErr(error); return; }
       if (!session) { location.href = "login.html"; return; }
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr) { showErr(userErr); return; }
       currentUser = user;
     }
 
     async function fetchAll() {
-      const { data: itemsData } = await supabase
+      const { data: itemsData, error: itemsErr } = await supabase
         .from("watchlist_items")
-        .select("id, ticker, notes, created_at, created_by")
+        .select("id, ticker, notes, created_at, created_by, suggested_by_name")
         .order("created_at", { ascending: false });
+      if (itemsErr) throw itemsErr;
       items = itemsData || [];
 
-      const { data: votesData } = await supabase
+      const { data: votesData, error: votesErr } = await supabase
         .from("watchlist_votes")
         .select("item_id, user_id, value");
+      if (votesErr) throw votesErr;
       votes = votesData || [];
+
       myVotes = votes.filter(v => v.user_id === currentUser.id);
 
       const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
-      if (uniqueTickers) pctMap = await loadPctJSONP(uniqueTickers);
+      pctMap = {};
+      if (uniqueTickers) {
+        try { pctMap = await loadPctJSONP(uniqueTickers); }
+        catch (e) { console.warn("Sheet percent load failed", e); }
+      }
     }
 
     function computeScores() {
@@ -152,7 +169,8 @@
       if (!rec || typeof rec.pct !== "number") return `<div class="sub muted">change n/a</div>`;
       const pct = rec.pct * 100;
       const cls = pct >= 0 ? "pct up" : "pct down";
-      return `<div class="${cls}">${pct.toFixed(2)}%</div>`;
+      const priceStr = rec.price ? Number(rec.price).toFixed(2) : "n/a";
+      return `<div class="${cls}">${pct.toFixed(2)}%</div><div class="sub">now ${priceStr}</div>`;
     }
 
     function mergeSorted() {
@@ -175,6 +193,7 @@
       const list = document.getElementById("list");
       list.innerHTML = "";
       merged.forEach(it => {
+        const suggester = it.suggested_by_name ? it.suggested_by_name : "Someone";
         const el = document.createElement("div");
         el.className = "item";
         el.innerHTML = `
@@ -184,6 +203,7 @@
           </div>
           <div class="grow">
             <div class="ticker">${it.ticker}</div>
+            <div class="muted">Suggested by ${suggester}</div>
             <div class="muted">${it.notes || ""}</div>
           </div>
           <div class="scorebox">${pctBadge(it.ticker)}</div>
@@ -213,35 +233,70 @@
       renderList();
     }
 
-    document.getElementById("addBtn").addEventListener("click", async () => {
+    function showMsg(text, ok=true) {
+      const m = document.getElementById("msg");
+      m.textContent = text;
+      m.className = ok ? "ok" : "error";
+      setTimeout(() => { m.textContent = ""; m.className = "muted"; }, 1800);
+    }
+
+    async function addItem() {
       const t = document.getElementById("ticker").value.trim().toUpperCase();
       const n = document.getElementById("notes").value.trim();
       const market = document.getElementById("market").value;
-      if (!t) return;
+      if (!t) { showMsg("Please enter a ticker", false); return; }
 
-      await supabase.from("watchlist_items").insert({ ticker: t, notes: n, created_by: currentUser.id });
+      // derive display name
+      const firstName = currentUser?.user_metadata?.first_name || "";
+      const fallback = (currentUser?.email || "").split("@")[0] || "Member";
+      const displayName = firstName || fallback;
 
-      // log to sheet
-      fetch(SHEET_WEBAPP_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({
-          email: currentUser.email || "",
-          user_id: currentUser.id,
-          ticker: t,
-          notes: n,
-          market
-        })
-      });
+      try {
+        // write to Supabase with suggester name
+        const { error } = await supabase
+          .from("watchlist_items")
+          .insert({ ticker: t, notes: n, created_by: currentUser.id, suggested_by_name: displayName });
+        if (error) throw error;
 
-      document.getElementById("ticker").value = "";
-      document.getElementById("notes").value = "";
-      document.getElementById("market").value = "AUTO";
-      await fetchAll();
-      renderList();
-    });
+        // log to Google Sheet
+        try {
+          await fetch(SHEET_WEBAPP_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({
+              email: currentUser.email || "",
+              user_id: currentUser.id,
+              ticker: t,
+              notes: n,
+              market
+            })
+          });
+        } catch(e) {
+          console.warn("Sheet log failed", e);
+        }
 
+        document.getElementById("ticker").value = "";
+        document.getElementById("notes").value = "";
+        document.getElementById("market").value = "AUTO";
+        showMsg("Added");
+        await fetchAll();
+        renderList();
+      } catch (e) {
+        showErr(e);
+        showMsg(e.message || "Could not add", false);
+      }
+    }
+
+    function setupRealtime() {
+      const channel = supabase.channel("watchlist_changes");
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => { await fetchAll(); renderList(); });
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_votes" }, async () => { await fetchAll(); renderList(); });
+      channel.subscribe();
+    }
+
+    document.getElementById("addBtn").addEventListener("click", addItem);
+    document.getElementById("search").addEventListener("input", renderList);
     document.getElementById("btnSignOut").addEventListener("click", async () => {
       await supabase.auth.signOut(); location.href = "login.html";
     });
@@ -250,6 +305,18 @@
       await guard();
       await fetchAll();
       renderList();
+      setupRealtime();
+
+      // refresh percent badges periodically
+      setInterval(async () => {
+        const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+        if (!uniqueTickers) return;
+        try {
+          const data = await loadPctJSONP(uniqueTickers);
+          pctMap = data;
+          renderList();
+        } catch (_) {}
+      }, 60000);
     }
     init();
   </script>
