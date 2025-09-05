@@ -2,20 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Winnerland!</title>
+  <title>Winnerland Redirect</title>
 </head>
 <body>
-  <p>Redirecting...</p>
+  <p style="color:white; background:#121212; font-family:sans-serif; padding:1rem;">
+    Redirecting, please wait...
+  </p>
+
+  <!-- Include auth.js so Supabase is available -->
   <script type="module" src="auth.js"></script>
   <script type="module">
     const { getSession } = window.__auth__;
 
     (async () => {
-      const session = await getSession();
-      if (session) {
-        window.location.href = "members.html";
-      } else {
-        window.location.href = "signin.html";
+      try {
+        const session = await getSession();
+        if (session) {
+          // already signed in → send to members dashboard
+          window.location.replace("members.html");
+        } else {
+          // not signed in → send to sign in page
+          window.location.replace("signin.html");
+        }
+      } catch (e) {
+        console.error("Redirect error", e);
+        // fallback if something fails
+        window.location.replace("signin.html");
       }
     })();
   </script>
