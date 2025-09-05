@@ -14,7 +14,11 @@
     main { padding:16px; max-width:960px; margin:0 auto; }
     .card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
     .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
-    .row input, .row textarea, .row select { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
+    .row input { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
+    .btn { padding:.55rem .8rem; border-radius:10px; border:1px solid #333; background:#1f2937; color:#fff; cursor:pointer; }
+    .btn:hover { background:#273244; }
+    .btn-cta { background:#2563eb; border-color:#2563eb; }
+    .btn-cta:hover { background:#1d4ed8; }
     .grid { display:grid; grid-template-columns: 1fr; gap:.75rem; margin-top:1rem; }
     @media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
     .item { display:flex; gap:.75rem; align-items:flex-start; background:#171717; border:1px solid #262626; border-radius:12px; padding:12px; }
@@ -31,6 +35,7 @@
     .ok { color:#86efac; }
     .error { color:#fca5a5; }
     .topbar { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-bottom:.75rem; }
+    #err { margin:.5rem 0; color:#fca5a5; display:none; }
   </style>
 </head>
 <body>
@@ -51,8 +56,8 @@
         </div>
         <button class="btn btn-cta" id="addBtn">Add to watchlist</button>
       </div>
-      <div class="muted">Signed in users can add tickers. Everyone who is signed in can vote. Highest score goes to the top.</div>
       <div id="msg" class="muted" style="margin-top:.5rem;"></div>
+      <div id="err"></div>
     </section>
 
     <section class="card">
@@ -67,28 +72,39 @@
   </main>
 
   <script>
-    // Set your Supabase values
+    // Supabase
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Set your Google Apps Script Web App URL here
-    // Deploy the script below as a Web App, Anyone can access
+    // Google Apps Script Web App URL
+    // Use text/plain to avoid preflight, then parse JSON on the Apps Script side
     const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxxJKwTe82Td-rMyyJl5FkNMvuVIv30YodBfs3Unz7FtWriXZ__spA2yTkuWvDkYYg0kQ/exec";
 
     let currentUser = null;
     let items = [];
-    let scores = [];
+    let votes = []; // raw votes (item_id, user_id, value)
     let myVotes = [];
 
+    function showErr(e) {
+      console.error(e);
+      const box = document.getElementById("err");
+      box.textContent = typeof e === "string" ? e : (e && e.message) ? e.message : "Something went wrong";
+      box.style.display = "block";
+      setTimeout(() => { box.style.display = "none"; }, 4000);
+    }
+
     async function guard() {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) { showErr(error); return; }
       if (!session) { location.href = "login.html"; return; }
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr) { showErr(userErr); return; }
       currentUser = user;
     }
 
     async function fetchAll() {
+      // Items
       const { data: itemsData, error: itemsErr } = await supabase
         .from("watchlist_items")
         .select("id, ticker, notes, created_at, created_by")
@@ -96,37 +112,39 @@
       if (itemsErr) throw itemsErr;
       items = itemsData || [];
 
-      const { data: scoreData, error: scoreErr } = await supabase
+      // Votes, fetch raw values, compute scores on client
+      const { data: votesData, error: votesErr } = await supabase
         .from("watchlist_votes")
-        .select("item_id, score:sum(value)")
-        .group("item_id");
-      if (scoreErr) throw scoreErr;
-      scores = scoreData || [];
+        .select("item_id, user_id, value");
+      if (votesErr) throw votesErr;
+      votes = votesData || [];
 
-      const { data: myVoteData, error: myVoteErr } = await supabase
-        .from("watchlist_votes")
-        .select("item_id, value")
-        .eq("user_id", currentUser.id);
-      if (myVoteErr) throw myVoteErr;
-      myVotes = myVoteData || [];
+      // My votes, quick lookup
+      myVotes = votes.filter(v => v.user_id === currentUser.id);
+    }
+
+    function computeScores() {
+      const m = new Map();
+      for (const v of votes) {
+        m.set(v.item_id, (m.get(v.item_id) || 0) + (v.value || 0));
+      }
+      return m;
     }
 
     function mergeSorted() {
-      const scoreMap = new Map(scores.map(s => [s.item_id, s.score || 0]));
+      const scoreMap = computeScores();
       const myMap = new Map(myVotes.map(v => [v.item_id, v.value]));
       const merged = items.map(it => ({
         ...it,
         score: scoreMap.get(it.id) || 0,
         myVote: myMap.get(it.id) || 0
       }));
-      // Always sort by score high to low, then by ticker
       merged.sort((a,b) => b.score - a.score || a.ticker.localeCompare(b.ticker));
       return merged;
     }
 
     function renderList() {
       const q = (document.getElementById("search").value || "").trim().toUpperCase();
-
       let merged = mergeSorted();
       if (q) merged = merged.filter(i => i.ticker.toUpperCase().includes(q));
 
@@ -158,17 +176,21 @@
     }
 
     async function onVote(itemId, v) {
-      const current = myVotes.find(m => m.item_id === itemId);
-      if (current && current.value === v) {
-        await supabase.from("watchlist_votes").delete().match({ item_id: itemId, user_id: currentUser.id });
-      } else {
-        await supabase.from("watchlist_votes").upsert(
-          { item_id: itemId, user_id: currentUser.id, value: v },
-          { onConflict: "item_id,user_id" }
-        );
-      }
-      await fetchAll();
-      renderList();
+      try {
+        const current = myVotes.find(m => m.item_id === itemId);
+        if (current && current.value === v) {
+          const { error } = await supabase.from("watchlist_votes").delete().match({ item_id: itemId, user_id: currentUser.id });
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("watchlist_votes").upsert(
+            { item_id: itemId, user_id: currentUser.id, value: v },
+            { onConflict: "item_id,user_id" }
+          );
+          if (error) throw error;
+        }
+        await fetchAll();
+        renderList();
+      } catch (e) { showErr(e); }
     }
 
     function showMsg(text, ok=true) {
@@ -183,15 +205,15 @@
       const n = document.getElementById("notes").value.trim();
       if (!t) { showMsg("Please enter a ticker", false); return; }
       try {
-        // 1, write to Supabase
+        // 1) write to Supabase
         const { error } = await supabase.from("watchlist_items").insert({ ticker: t, notes: n, created_by: currentUser.id });
         if (error) throw error;
 
-        // 2, log to Google Sheet
+        // 2) log to Google Sheet (text/plain avoids CORS preflight)
         try {
           await fetch(SHEET_WEBAPP_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "text/plain" },
             body: JSON.stringify({
               email: currentUser.email || "",
               user_id: currentUser.id,
@@ -200,7 +222,6 @@
             })
           });
         } catch(e) {
-          // Sheet logging failed, keep silent and continue
           console.warn("Sheet log failed", e);
         }
 
@@ -210,20 +231,18 @@
         await fetchAll();
         renderList();
       } catch (e) {
+        showErr(e);
         showMsg(e.message || "Could not add", false);
       }
     }
 
-    // Realtime updates so the list always reflects current votes and items
     function setupRealtime() {
       const channel = supabase.channel("watchlist_changes");
       channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => {
-        await fetchAll();
-        renderList();
+        await fetchAll(); renderList();
       });
       channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_votes" }, async () => {
-        await fetchAll();
-        renderList();
+        await fetchAll(); renderList();
       });
       channel.subscribe();
     }
