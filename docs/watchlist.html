@@ -94,8 +94,7 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Google Apps Script Web App URL
-    // Must be the latest deployment with the new doGet handler
+    // Apps Script Web App URL, use your latest deployment
     const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby9-PQORBC7L27BItmvRVowsut2KAgcPyJxeDszODyouSxYB59pOf1TrIGm1SLQEIiccQ/exec";
 
     let currentUser = null;
@@ -110,6 +109,23 @@
       box.textContent = typeof e === "string" ? e : (e && e.message) ? e.message : "Something went wrong";
       box.style.display = "block";
       setTimeout(() => { box.style.display = "none"; }, 4000);
+    }
+
+    // JSONP loader for sheet percents, avoids CORS
+    function loadPctJSONP(tickers, cbName = "WL_PCT_CB") {
+      return new Promise(resolve => {
+        if (window[cbName]) delete window[cbName];
+        window[cbName] = function(resp) {
+          try { resolve(resp && resp.data ? resp.data : {}); }
+          finally {
+            if (script && script.parentNode) script.parentNode.removeChild(script);
+            delete window[cbName];
+          }
+        };
+        const script = document.createElement("script");
+        script.src = SHEET_WEBAPP_URL + "?tickers=" + encodeURIComponent(tickers) + "&callback=" + cbName + "&ts=" + Date.now();
+        document.head.appendChild(script);
+      });
     }
 
     async function guard() {
@@ -137,17 +153,12 @@
 
       myVotes = votes.filter(v => v.user_id === currentUser.id);
 
-      // Fetch percent data for unique tickers from the sheet
+      // Fetch percent data from sheet via JSONP
       const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
       pctMap = {};
       if (uniqueTickers) {
-        try {
-          const res = await fetch(SHEET_WEBAPP_URL + "?tickers=" + encodeURIComponent(uniqueTickers));
-          const json = await res.json();
-          if (json && json.ok && json.data) pctMap = json.data;
-        } catch (e) {
-          console.warn("Sheet percent fetch failed", e);
-        }
+        try { pctMap = await loadPctJSONP(uniqueTickers); }
+        catch (e) { console.warn("Sheet percent load failed", e); }
       }
     }
 
@@ -162,7 +173,8 @@
       if (!rec || typeof rec.pct !== "number") return `<div class="sub muted">change n/a</div>`;
       const pct = rec.pct * 100;
       const cls = pct >= 0 ? "pct up" : "pct down";
-      return `<div class="${cls}">${pct.toFixed(2)}%</div><div class="sub">now ${rec.price ? Number(rec.price).toFixed(2) : "n/a"}</div>`;
+      const priceStr = rec.price ? Number(rec.price).toFixed(2) : "n/a";
+      return `<div class="${cls}">${pct.toFixed(2)}%</div><div class="sub">now ${priceStr}</div>`;
     }
 
     function mergeSorted() {
@@ -246,7 +258,7 @@
         const { error } = await supabase.from("watchlist_items").insert({ ticker: t, notes: n, created_by: currentUser.id });
         if (error) throw error;
 
-        // Log to sheet, no-cors since we do not need the response here
+        // Log to sheet, no CORS response needed
         try {
           await fetch(SHEET_WEBAPP_URL, {
             method: "POST",
@@ -291,17 +303,14 @@
       renderList();
       setupRealtime();
 
-      // Refresh percent badges every 60 seconds so the live price moves
+      // Refresh percent badges every 60 seconds
       setInterval(async () => {
+        const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+        if (!uniqueTickers) return;
         try {
-          const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
-          if (!uniqueTickers) return;
-          const res = await fetch(SHEET_WEBAPP_URL + "?tickers=" + encodeURIComponent(uniqueTickers));
-          const json = await res.json();
-          if (json && json.ok && json.data) {
-            pctMap = json.data;
-            renderList();
-          }
+          const data = await loadPctJSONP(uniqueTickers);
+          pctMap = data;
+          renderList();
         } catch (_) {}
       }, 60000);
     }
