@@ -14,7 +14,7 @@
     main { padding:16px; max-width:1040px; margin:0 auto; }
     .card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
     .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
-    .row input, .row select, .row textarea { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
+    .row input, .row select { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
     .btn { padding:.55rem .8rem; border-radius:10px; border:1px solid #333; background:#1f2937; color:#fff; cursor:pointer; }
     .btn:hover { background:#273244; }
     .btn-cta { background:#2563eb; border-color:#2563eb; }
@@ -40,16 +40,15 @@
     .pct.up { color:#22c55e; }
     .pct.down { color:#ef4444; }
 
-    /* Polls */
-    .pill { display:inline-flex; gap:.35rem; align-items:center; padding:.25rem .5rem; border:1px solid #333; border-radius:999px; background:#0f0f0f; }
-    .pill .x { cursor:pointer; opacity:.75; }
-    .pollitems { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.5rem; }
-    .table { width:100%; border-collapse:collapse; }
-    .table th, .table td { padding:.55rem .6rem; border-bottom:1px solid #2a2a2a; text-align:left; }
-    .table th { color:#c9cdd3; font-weight:600; font-size:.9rem; }
-    .small { font-size:.85rem; }
-    .hint { color:#9aa0a6; font-size:.85rem; }
-    .sep { height:1px; background:#252525; margin:.75rem 0; }
+    /* Leaderboard */
+    .leader-card { margin: 0 0 1rem 0; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding:.55rem .6rem; border-bottom:1px solid #2a2a2a; text-align:left; }
+    th { color:#c9cdd3; font-weight:600; font-size:.9rem; }
+    td small { color:#9aa0a6; }
+    .chip { display:inline-block; padding:.1rem .45rem; border:1px solid #333; border-radius:999px; font-size:.8rem; }
+    .avg.up { color:#22c55e; }
+    .avg.down { color:#ef4444; }
   </style>
 </head>
 <body>
@@ -62,6 +61,14 @@
   </header>
 
   <main>
+    <!-- Leaderboard -->
+    <section class="card leader-card">
+      <h2 style="margin:.25rem 0 0.75rem 0; font-size:1rem;">Leaderboard, average percent change by suggester</h2>
+      <div id="leaderWrap">
+        <div class="muted">Loading leaderboard, please wait</div>
+      </div>
+    </section>
+
     <!-- Add form -->
     <section class="card" style="margin-bottom:1rem;">
       <div class="topbar">
@@ -88,37 +95,8 @@
       <div id="err"></div>
     </section>
 
-    <!-- Active poll -->
-    <section class="card" id="activePollCard" style="display:none;">
-      <h2 style="margin:.25rem 0 .5rem 0; font-size:1rem;">Active poll</h2>
-      <div id="activePollMeta" class="hint"></div>
-      <div class="sep"></div>
-      <div id="activePollWrap"></div>
-      <div class="row" id="closePollRow" style="margin-top:.5rem; display:none;">
-        <button class="btn danger" id="btnClosePoll">Close poll</button>
-      </div>
-    </section>
-
-    <!-- Poll builder -->
-    <section class="card" id="pollBuilderCard">
-      <h2 style="margin:.25rem 0 .5rem 0; font-size:1rem;">Create a poll</h2>
-      <div class="row">
-        <input id="pollTitle" placeholder="Title, for example September buys" style="flex:1;" />
-        <input id="pollClose" type="datetime-local" />
-      </div>
-      <div class="row" style="margin-top:.5rem;">
-        <textarea id="pollNote" rows="2" placeholder="Short note, optional" style="flex:1;"></textarea>
-      </div>
-      <div class="hint" style="margin-top:.5rem;">Use Add to poll on any ticker below, then click Create poll</div>
-      <div class="pollitems" id="pollDraftItems"></div>
-      <div class="row" style="margin-top:.5rem;">
-        <button class="btn btn-cta" id="btnCreatePoll">Create poll</button>
-        <button class="btn" id="btnClearDraft" type="button">Clear</button>
-      </div>
-    </section>
-
-    <!-- Watchlist -->
-    <section class="card" style="margin-top:1rem;">
+    <!-- List -->
+    <section class="card">
       <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
         <div class="row">
           <label>Filter</label>
@@ -127,36 +105,21 @@
       </div>
       <div id="list" class="grid"></div>
     </section>
-
-    <!-- Leaderboard at bottom -->
-    <section class="card" style="margin-top:1rem;">
-      <h2 style="margin:.25rem 0 .75rem 0; font-size:1rem;">Leaderboard, average percent change by suggester</h2>
-      <div id="leaderWrap">
-        <div class="muted">Loading leaderboard, please wait</div>
-      </div>
-    </section>
   </main>
 
   <script>
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
-    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const SHEET_WEBAPP_URL = "YOUR_APPS_SCRIPT_WEBAPP_URL_HERE";
+    const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby9-PQORBC7L27BItmvRVowsut2KAgcPyJxeDszODyouSxYB59pOf1TrIGm1SLQEIiccQ/exec";
 
     let currentUser = null;
-    let items = [];       // watchlist items
-    let votes = [];       // watchlist votes
+    let items = [];       // from Supabase
+    let votes = [];       // from Supabase
     let myVotes = [];
-    let pctMap = {};      // { ticker: { pct, price, added, market } }
+    let pctMap = {};      // { TICKER: { pct, price, added, market } }
 
-    // Poll state
-    let activePoll = null;          // { id, title, note, closes_at, created_by, status }
-    let activePollItems = [];       // [{ id, ticker, amount, ... }]
-    let myPollVotes = [];           // [{ poll_item_id, user_id, value }]
-    const draft = new Map();        // ticker -> { ticker, amount }
-
-    /* Utilities */
     function showErr(e) {
       console.error(e);
       const box = document.getElementById("err");
@@ -164,18 +127,8 @@
       box.style.display = "block";
       setTimeout(() => { box.style.display = "none"; }, 5000);
     }
-    function showMsg(text, ok=true) {
-      const m = document.getElementById("msg");
-      m.textContent = text;
-      m.className = ok ? "ok" : "error";
-      setTimeout(() => { m.textContent = ""; m.className = "muted"; }, 1800);
-    }
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c] || c));
-    }
-    function fmtPct(p) { return (p * 100).toFixed(2) + "%"; }
 
-    // JSONP for sheet percents, avoids CORS
+    // JSONP loader, avoids CORS
     function loadPctJSONP(tickers, cbName = "WL_PCT_CB") {
       return new Promise(resolve => {
         if (window[cbName]) delete window[cbName];
@@ -192,48 +145,59 @@
       });
     }
 
-    /* Auth guard */
     async function guard() {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) { showErr(error.message || error); }
       if (!session) { location.href = "login.html"; return; }
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: userErr } = await supabase.auth.getUser();
+      if (userErr) { showErr(userErr.message || userErr); return; }
       currentUser = user;
     }
 
-    /* Fetch watchlist and sheet data */
-    async function fetchWatchlistAndPercents() {
-      const { data: itemsData, error: itemsErr } = await supabase
-        .from("watchlist_items").select("*").order("created_at", { ascending: false });
-      if (itemsErr) throw itemsErr;
-      items = itemsData || [];
+    async function fetchAll() {
+      try {
+        // Select all columns, safer if schema changes
+        const { data: itemsData, error: itemsErr } = await supabase
+          .from("watchlist_items")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (itemsErr) throw itemsErr;
+        items = itemsData || [];
 
-      const { data: votesData, error: votesErr } = await supabase
-        .from("watchlist_votes").select("item_id, user_id, value");
-      if (votesErr) throw votesErr;
-      votes = votesData || [];
-      myVotes = votes.filter(v => v.user_id === currentUser.id);
+        const { data: votesData, error: votesErr } = await supabase
+          .from("watchlist_votes")
+          .select("item_id, user_id, value");
+        if (votesErr) throw votesErr;
+        votes = votesData || [];
 
-      const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
-      pctMap = {};
-      if (uniqueTickers) {
-        try { pctMap = await loadPctJSONP(uniqueTickers); }
-        catch (_) {}
+        myVotes = votes.filter(v => v.user_id === currentUser.id);
+
+        const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+        pctMap = {};
+        if (uniqueTickers) {
+          try { pctMap = await loadPctJSONP(uniqueTickers); }
+          catch (e) { console.warn("Sheet percent load failed", e); }
+        }
+      } catch (e) {
+        showErr(e.message || e);
       }
     }
 
-    /* Watchlist UI */
     function computeScores() {
       const m = new Map();
       for (const v of votes) m.set(v.item_id, (m.get(v.item_id) || 0) + (v.value || 0));
       return m;
     }
+
     function pctBadge(ticker) {
       const rec = pctMap[ticker];
       if (!rec || typeof rec.pct !== "number") return `<div class="sub muted">change n/a</div>`;
-      const cls = rec.pct >= 0 ? "pct up" : "pct down";
+      const pct = rec.pct * 100;
+      const cls = pct >= 0 ? "pct up" : "pct down";
       const priceStr = rec.price ? Number(rec.price).toFixed(2) : "n/a";
-      return `<div class="${cls}">${fmtPct(rec.pct)}</div><div class="sub">now ${priceStr}</div>`;
+      return `<div class="${cls}">${pct.toFixed(2)}%</div><div class="sub">now ${priceStr}</div>`;
     }
+
     function mergeSorted() {
       const scoreMap = computeScores();
       const myMap = new Map(myVotes.map(v => [v.item_id, v.value]));
@@ -242,9 +206,76 @@
         score: scoreMap.get(it.id) || 0,
         myVote: myMap.get(it.id) || 0
       }));
-      merged.sort((a,b) => b.score - a.score || (a.ticker || "").localeCompare(b.ticker || ""));
+      merged.sort((a,b) => b.score - a.score || a.ticker.localeCompare(b.ticker));
       return merged;
     }
+
+    /* ---------------- Leaderboard compute and render ---------------- */
+
+    function computeLeaderboard() {
+      // Build an array of { name, count, avgPct } from items and pctMap
+      const byUser = new Map();
+      for (const it of items) {
+        const ticker = it.ticker || "";
+        const rec = pctMap[ticker];
+        const pct = rec && typeof rec.pct === "number" ? rec.pct : null;
+        if (pct === null) continue;
+
+        const name = (it.suggested_by_name && it.suggested_by_name.trim())
+          ? it.suggested_by_name.trim()
+          : "Someone";
+
+        const stat = byUser.get(name) || { name, count: 0, sumPct: 0 };
+        stat.count += 1;
+        stat.sumPct += pct; // pct is decimal, for example 0.1234
+        byUser.set(name, stat);
+      }
+
+      const rows = Array.from(byUser.values())
+        .map(r => ({ name: r.name, count: r.count, avgPct: r.count ? r.sumPct / r.count : 0 }))
+        .sort((a, b) => b.avgPct - a.avgPct || b.count - a.count || a.name.localeCompare(b.name));
+
+      return rows;
+    }
+
+    function renderLeaderboard() {
+      const wrap = document.getElementById("leaderWrap");
+      const rows = computeLeaderboard();
+
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="muted">No data yet, add a few tickers first</div>`;
+        return;
+      }
+
+      const html = [
+        `<table>`,
+        `<thead><tr><th>Rank</th><th>Member</th><th>Average % change</th><th>Picks</th></tr></thead>`,
+        `<tbody>`,
+        ...rows.map((r, i) => {
+          const pct = r.avgPct * 100;
+          const cls = pct >= 0 ? "avg up" : "avg down";
+          return `<tr>
+            <td>${i + 1}</td>
+            <td>${escapeHtml(r.name)}</td>
+            <td class="${cls}">${pct.toFixed(2)}%</td>
+            <td><span class="chip">${r.count}</span></td>
+          </tr>`;
+        }),
+        `</tbody></table>`
+      ].join("");
+
+      wrap.innerHTML = html;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => {
+        const map = { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" };
+        return map[c] || c;
+      });
+    }
+
+    /* ---------------- List render and interactions ---------------- */
+
     function renderList() {
       const q = (document.getElementById("search").value || "").trim().toUpperCase();
       let merged = mergeSorted();
@@ -262,14 +293,13 @@
             <div class="sub">votes</div>
           </div>
           <div class="grow">
-            <div class="ticker">${escapeHtml(it.ticker || "")}</div>
+            <div class="ticker">${it.ticker || ""}</div>
             <div class="muted">Suggested by ${escapeHtml(suggester)}</div>
             <div class="muted">${escapeHtml(it.notes || "")}</div>
           </div>
           <div class="scorebox">${pctBadge(it.ticker || "")}</div>
           <div class="right">
             <button class="vote ${it.myVote === 1 ? "active" : ""}" data-id="${it.id}">Vote</button>
-            <button class="btn" data-add="${escapeHtml(it.ticker || "")}">Add to poll</button>
           </div>
         `;
         list.appendChild(el);
@@ -278,303 +308,125 @@
       document.querySelectorAll(".vote").forEach(btn => {
         btn.addEventListener("click", () => onVote(btn.dataset.id));
       });
-      document.querySelectorAll("[data-add]").forEach(btn => {
-        btn.addEventListener("click", () => addTickerToDraft(btn.getAttribute("data-add")));
-      });
     }
+
     async function onVote(itemId) {
-      const current = myVotes.find(m => m.item_id === itemId);
-      if (current) {
-        await supabase.from("watchlist_votes").delete().match({ item_id: itemId, user_id: currentUser.id });
-      } else {
-        await supabase.from("watchlist_votes").upsert(
-          { item_id: itemId, user_id: currentUser.id, value: 1 },
-          { onConflict: "item_id,user_id" }
-        );
-      }
-      await fetchWatchlistAndPercents();
-      renderList();
-    }
-
-    /* Leaderboard */
-    function computeLeaderboard() {
-      const byUser = new Map();
-      for (const it of items) {
-        const ticker = it.ticker || "";
-        const rec = pctMap[ticker];
-        const pct = rec && typeof rec.pct === "number" ? rec.pct : null;
-        if (pct === null) continue;
-        const name = (it.suggested_by_name && it.suggested_by_name.trim()) ? it.suggested_by_name.trim() : "Someone";
-        const stat = byUser.get(name) || { name, count: 0, sumPct: 0 };
-        stat.count += 1;
-        stat.sumPct += pct;
-        byUser.set(name, stat);
-      }
-      return Array.from(byUser.values())
-        .map(r => ({ name: r.name, count: r.count, avgPct: r.count ? r.sumPct / r.count : 0 }))
-        .sort((a, b) => b.avgPct - a.avgPct || b.count - a.count || a.name.localeCompare(b.name));
-    }
-    function renderLeaderboard() {
-      const wrap = document.getElementById("leaderWrap");
-      const rows = computeLeaderboard();
-      if (!rows.length) { wrap.innerHTML = `<div class="muted">No data yet</div>`; return; }
-      const html = [
-        `<table class="table"><thead><tr><th>Rank</th><th>Member</th><th>Average % change</th><th>Picks</th></tr></thead><tbody>`,
-        ...rows.map((r, i) => {
-          const cls = r.avgPct >= 0 ? "pct up" : "pct down";
-          return `<tr>
-            <td>${i + 1}</td>
-            <td>${escapeHtml(r.name)}</td>
-            <td class="${cls}">${fmtPct(r.avgPct)}</td>
-            <td>${r.count}</td>
-          </tr>`;
-        }),
-        `</tbody></table>`
-      ].join("");
-      wrap.innerHTML = html;
-    }
-
-    /* Poll builder, add tickers, set amount, create poll */
-    function renderDraft() {
-      const wrap = document.getElementById("pollDraftItems");
-      wrap.innerHTML = "";
-      if (draft.size === 0) {
-        wrap.innerHTML = `<div class="hint">No tickers in draft yet</div>`;
-        return;
-      }
-      for (const { ticker, amount } of draft.values()) {
-        const pill = document.createElement("div");
-        pill.className = "pill";
-        pill.innerHTML = `
-          <strong>${escapeHtml(ticker)}</strong>
-          <span class="small">amount ${Number(amount).toLocaleString()}</span>
-          <span class="x" title="Remove" data-x="${escapeHtml(ticker)}">✕</span>
-        `;
-        wrap.appendChild(pill);
-      }
-      wrap.querySelectorAll("[data-x]").forEach(x => x.addEventListener("click", () => {
-        draft.delete(x.getAttribute("data-x"));
-        renderDraft();
-      }));
-    }
-    function addTickerToDraft(ticker) {
-      if (!ticker) return;
-      const prev = draft.get(ticker);
-      const def = prev ? String(prev.amount) : "";
-      const input = prompt(`Proposed spend for ${ticker}, numbers only`, def);
-      if (input === null) return;
-      const amt = Number(String(input).replace(/[^\d.]/g, ""));
-      if (!isFinite(amt) || amt <= 0) { showMsg("Please enter a valid amount", false); return; }
-      draft.set(ticker, { ticker, amount: amt });
-      renderDraft();
-    }
-    async function createPoll() {
-      if (draft.size === 0) { showMsg("Add at least one ticker to the poll", false); return; }
-      const title = document.getElementById("pollTitle").value.trim();
-      if (!title) { showMsg("Poll title is required", false); return; }
-      const note = document.getElementById("pollNote").value.trim();
-      const closesAtRaw = document.getElementById("pollClose").value;
-      const closes_at = closesAtRaw ? new Date(closesAtRaw).toISOString() : null;
-
-      // 1, create poll
-      const { data: poll, error: pollErr } = await supabase.from("polls")
-        .insert({ title, note, closes_at, created_by: currentUser.id, status: "open" })
-        .select("*").single();
-      if (pollErr) { showErr(pollErr); return; }
-
-      // 2, insert items
-      const itemsPayload = Array.from(draft.values()).map(d => ({
-        poll_id: poll.id, ticker: d.ticker, amount: d.amount, added_by: currentUser.id
-      }));
-      const { error: itemErr } = await supabase.from("poll_items").insert(itemsPayload);
-      if (itemErr) { showErr(itemErr); return; }
-
-      // Clear and refresh
-      draft.clear();
-      document.getElementById("pollTitle").value = "";
-      document.getElementById("pollNote").value = "";
-      document.getElementById("pollClose").value = "";
-      renderDraft();
-      await fetchActivePoll();
-      renderActivePoll();
-      showMsg("Poll created");
-    }
-
-    /* Active poll, fetch, render, vote, close */
-    async function fetchActivePoll() {
-      // latest open poll
-      const { data: polls, error: pollErr } = await supabase
-        .from("polls").select("*").eq("status", "open").order("created_at", { ascending: false }).limit(1);
-      if (pollErr) { showErr(pollErr); return; }
-      activePoll = polls && polls.length ? polls[0] : null;
-
-      if (!activePoll) { activePollItems = []; myPollVotes = []; return; }
-
-      const { data: itemsData, error: itemsErr } = await supabase
-        .from("poll_items").select("*").eq("poll_id", activePoll.id).order("created_at", { ascending: true });
-      if (itemsErr) { showErr(itemsErr); return; }
-      activePollItems = itemsData || [];
-
-      const { data: votesData, error: votesErr } = await supabase
-        .from("poll_votes").select("poll_item_id, user_id, value").in("poll_item_id", activePollItems.map(i => i.id));
-      if (votesErr) { showErr(votesErr); return; }
-      myPollVotes = (votesData || []).filter(v => v.user_id === currentUser.id);
-    }
-
-    function renderActivePoll() {
-      const card = document.getElementById("activePollCard");
-      const meta = document.getElementById("activePollMeta");
-      const wrap = document.getElementById("activePollWrap");
-      const closeRow = document.getElementById("closePollRow");
-
-      if (!activePoll) {
-        card.style.display = "none";
-        return;
-      }
-      card.style.display = "";
-
-      const when = activePoll.closes_at ? `closes ${new Date(activePoll.closes_at).toLocaleString()}` : "no close date";
-      meta.textContent = `${activePoll.title} (${when})${activePoll.note ? ", " + activePoll.note : ""}`;
-
-      const votesByItem = new Map();
-      for (const it of activePollItems) votesByItem.set(it.id, 0);
-      const { data: allVotes } = { data: myPollVotes.concat([]) }; // we only need self mark for active class
-      // We will count totals from server again below for safety
-      const totals = new Map();
-      totals.clear();
-
-      wrap.innerHTML = "";
-      const tableRows = [];
-      for (const it of activePollItems) {
-        const mine = myPollVotes.find(v => v.poll_item_id === it.id);
-        tableRows.push(`
-          <tr>
-            <td>${escapeHtml(it.ticker)}</td>
-            <td>${it.amount != null ? Number(it.amount).toLocaleString() : "-"}</td>
-            <td data-total="${it.id}">0</td>
-            <td>
-              <button class="vote ${mine ? "active" : ""}" data-pvote="${it.id}">${mine ? "Voted" : "Vote"}</button>
-            </td>
-          </tr>
-        `);
-      }
-      wrap.innerHTML = `
-        <table class="table">
-          <thead><tr><th>Ticker</th><th>Proposed spend</th><th>Votes</th><th></th></tr></thead>
-          <tbody>${tableRows.join("")}</tbody>
-        </table>
-      `;
-
-      // fetch accurate totals and fill
-      updatePollVoteTotals();
-
-      // wire vote buttons
-      wrap.querySelectorAll("[data-pvote]").forEach(btn => {
-        btn.addEventListener("click", () => onPollVote(btn.getAttribute("data-pvote")));
-      });
-
-      // show close button only to poll creator
-      closeRow.style.display = activePoll.created_by === currentUser.id ? "" : "none";
-    }
-
-    async function updatePollVoteTotals() {
-      if (!activePoll || activePollItems.length === 0) return;
-      const { data: votesData, error } = await supabase
-        .from("poll_votes").select("poll_item_id, value").in("poll_item_id", activePollItems.map(i => i.id));
-      if (error) return;
-      const counts = new Map();
-      for (const v of votesData || []) counts.set(v.poll_item_id, (counts.get(v.poll_item_id) || 0) + (v.value || 0));
-      for (const it of activePollItems) {
-        const cell = document.querySelector(`[data-total="${it.id}"]`);
-        if (cell) cell.textContent = counts.get(it.id) || 0;
+      try {
+        const current = myVotes.find(m => m.item_id === itemId);
+        if (current) {
+          const { error } = await supabase.from("watchlist_votes").delete().match({ item_id: itemId, user_id: currentUser.id });
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("watchlist_votes").upsert(
+            { item_id: itemId, user_id: currentUser.id, value: 1 },
+            { onConflict: "item_id,user_id" }
+          );
+          if (error) throw error;
+        }
+        await fetchAll();
+        renderLeaderboard();
+        renderList();
+      } catch (e) {
+        showErr(e.message || e);
       }
     }
 
-    async function onPollVote(pollItemId) {
-      const mine = myPollVotes.find(v => v.poll_item_id === pollItemId);
-      if (mine) {
-        await supabase.from("poll_votes").delete().match({ poll_item_id: pollItemId, user_id: currentUser.id });
-      } else {
-        await supabase.from("poll_votes").upsert(
-          { poll_item_id: pollItemId, user_id: currentUser.id, value: 1 },
-          { onConflict: "poll_item_id,user_id" }
-        );
-      }
-      await fetchActivePoll();
-      renderActivePoll();
+    function showMsg(text, ok=true) {
+      const m = document.getElementById("msg");
+      m.textContent = text;
+      m.className = ok ? "ok" : "error";
+      setTimeout(() => { m.textContent = ""; m.className = "muted"; }, 1800);
     }
 
-    async function closePoll() {
-      if (!activePoll) return;
-      await supabase.from("polls").update({ status: "closed" }).eq("id", activePoll.id);
-      await fetchActivePoll();
-      renderActivePoll();
-      showMsg("Poll closed");
-    }
-
-    /* Page interactions */
-    document.getElementById("btnCreatePoll").addEventListener("click", createPoll);
-    document.getElementById("btnClearDraft").addEventListener("click", () => { draft.clear(); renderDraft(); });
-    document.getElementById("btnSignOut").addEventListener("click", async () => { await supabase.auth.signOut(); location.href = "login.html"; });
-    document.getElementById("search").addEventListener("input", renderList);
-    document.getElementById("btnClosePoll").addEventListener("click", closePoll);
-    document.getElementById("addBtn").addEventListener("click", async () => {
+    async function addItem() {
       const t = document.getElementById("ticker").value.trim().toUpperCase();
       const n = document.getElementById("notes").value.trim();
       const market = document.getElementById("market").value;
       if (!t) { showMsg("Please enter a ticker", false); return; }
+
       const firstName = currentUser?.user_metadata?.first_name || "";
       const fallback = (currentUser?.email || "").split("@")[0] || "Member";
       const displayName = firstName || fallback;
 
-      await supabase.from("watchlist_items").insert({ ticker: t, notes: n, created_by: currentUser.id, suggested_by_name: displayName });
+      try {
+        // Store suggester name in the row
+        const { error } = await supabase
+          .from("watchlist_items")
+          .insert({ ticker: t, notes: n, created_by: currentUser.id, suggested_by_name: displayName });
+        if (error) throw error;
 
-      // Log to sheet quietly
-      fetch(SHEET_WEBAPP_URL, {
-        method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ email: currentUser.email || "", user_id: currentUser.id, ticker: t, notes: n, market })
+        // Log to sheet
+        try {
+          await fetch(SHEET_WEBAPP_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify({
+              email: currentUser.email || "",
+              user_id: currentUser.id,
+              ticker: t,
+              notes: n,
+              market
+            })
+          });
+        } catch(e) { console.warn("Sheet log failed", e); }
+
+        document.getElementById("ticker").value = "";
+        document.getElementById("notes").value = "";
+        document.getElementById("market").value = "AUTO";
+        showMsg("Added");
+        await fetchAll();
+        renderLeaderboard();
+        renderList();
+      } catch (e) {
+        showErr(e.message || e);
+        showMsg("Could not add", false);
+      }
+    }
+
+    function setupRealtime() {
+      const channel = supabase.channel("watchlist_changes");
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => {
+        await fetchAll(); renderLeaderboard(); renderList();
       });
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_votes" }, async () => {
+        await fetchAll(); renderLeaderboard(); renderList();
+      });
+      channel.subscribe();
+    }
 
-      document.getElementById("ticker").value = "";
-      document.getElementById("notes").value = "";
-      document.getElementById("market").value = "AUTO";
-      await fetchWatchlistAndPercents();
-      renderList();
-      renderLeaderboard();
-      showMsg("Added");
+    document.getElementById("addBtn").addEventListener("click", addItem);
+    document.getElementById("search").addEventListener("input", renderList);
+    document.getElementById("btnSignOut").addEventListener("click", async () => {
+      await supabase.auth.signOut(); location.href = "login.html";
     });
 
-    /* Init */
     async function init() {
-      await guard();
-      await fetchWatchlistAndPercents();
-      renderDraft();
-      await fetchActivePoll();
-      renderActivePoll();
-      renderList();
-      renderLeaderboard();
+      try {
+        await guard();
+        await fetchAll();
+        renderLeaderboard();
+        renderList();
+        setupRealtime();
 
-      // Realtime, keep polls and votes fresh
-      const ch = supabase.channel("poll_changes");
-      ch.on("postgres_changes", { event: "*", schema: "public", table: "polls" }, async () => { await fetchActivePoll(); renderActivePoll(); });
-      ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_items" }, async () => { await fetchActivePoll(); renderActivePoll(); });
-      ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, async () => { await fetchActivePoll(); renderActivePoll(); });
-      ch.subscribe();
-
-      // Refresh percents so leaderboard stays fresh
-      setInterval(async () => {
-        const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
-        if (!uniqueTickers) return;
-        try {
-          const data = await loadPctJSONP(uniqueTickers);
-          pctMap = data;
-          renderList();
-          renderLeaderboard();
-        } catch (_) {}
-      }, 60000);
+        // Refresh percents so leaderboard stays fresh
+        setInterval(async () => {
+          const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+          if (!uniqueTickers) return;
+          try {
+            const data = await loadPctJSONP(uniqueTickers);
+            pctMap = data;
+            renderLeaderboard();
+            renderList();
+          } catch (_) {}
+        }, 60000);
+      } catch (e) {
+        showErr(e.message || e);
+      }
     }
     init();
   </script>
 </body>
 </html>
+
 
