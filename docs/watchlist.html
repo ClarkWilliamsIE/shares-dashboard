@@ -11,7 +11,7 @@
     body { margin:0; background:#121212; color:#fff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
     header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; position:sticky; top:0; background:rgba(18,18,18,.9); border-bottom:1px solid #222; }
     h1 { font-size:1.05rem; margin:0; }
-    main { padding:16px; max-width:960px; margin:0 auto; }
+    main { padding:16px; max-width:1040px; margin:0 auto; }
     .card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
     .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
     .row input, .row select { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
@@ -20,7 +20,7 @@
     .btn-cta { background:#2563eb; border-color:#2563eb; }
     .btn-cta:hover { background:#1d4ed8; }
     .grid { display:grid; grid-template-columns: 1fr; gap:.75rem; margin-top:1rem; }
-    @media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } }
     .item { display:flex; gap:.75rem; align-items:flex-start; background:#171717; border:1px solid #262626; border-radius:12px; padding:12px; }
     .scorebox { min-width:92px; text-align:center; border:1px solid #333; border-radius:10px; padding:.35rem .5rem; background:#0f0f0f; }
     .score { font-size:1.05rem; font-weight:700; }
@@ -39,6 +39,16 @@
     .pct { font-weight:700; }
     .pct.up { color:#22c55e; }
     .pct.down { color:#ef4444; }
+
+    /* Leaderboard */
+    .leader-card { margin: 0 0 1rem 0; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding:.55rem .6rem; border-bottom:1px solid #2a2a2a; text-align:left; }
+    th { color:#c9cdd3; font-weight:600; font-size:.9rem; }
+    td small { color:#9aa0a6; }
+    .chip { display:inline-block; padding:.1rem .45rem; border:1px solid #333; border-radius:999px; font-size:.8rem; }
+    .avg.up { color:#22c55e; }
+    .avg.down { color:#ef4444; }
   </style>
 </head>
 <body>
@@ -51,6 +61,15 @@
   </header>
 
   <main>
+    <!-- Leaderboard -->
+    <section class="card leader-card">
+      <h2 style="margin:.25rem 0 0.75rem 0; font-size:1rem;">Leaderboard, average percent change by suggester</h2>
+      <div id="leaderWrap">
+        <div class="muted">Loading leaderboard, please wait</div>
+      </div>
+    </section>
+
+    <!-- Add form -->
     <section class="card" style="margin-bottom:1rem;">
       <div class="topbar">
         <div class="row" style="flex:1;">
@@ -76,6 +95,7 @@
       <div id="err"></div>
     </section>
 
+    <!-- List -->
     <section class="card">
       <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
         <div class="row">
@@ -95,20 +115,20 @@
     const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby9-PQORBC7L27BItmvRVowsut2KAgcPyJxeDszODyouSxYB59pOf1TrIGm1SLQEIiccQ/exec";
 
     let currentUser = null;
-    let items = [];
-    let votes = [];
+    let items = [];       // from Supabase
+    let votes = [];       // from Supabase
     let myVotes = [];
-    let pctMap = {};
+    let pctMap = {};      // { TICKER: { pct, price, added, market } }
 
     function showErr(e) {
       console.error(e);
       const box = document.getElementById("err");
       box.textContent = typeof e === "string" ? e : (e && e.message) ? e.message : "Something went wrong";
       box.style.display = "block";
-      setTimeout(() => { box.style.display = "none"; }, 4000);
+      setTimeout(() => { box.style.display = "none"; }, 5000);
     }
 
-    // JSONP loader for sheet percents
+    // JSONP loader, avoids CORS
     function loadPctJSONP(tickers, cbName = "WL_PCT_CB") {
       return new Promise(resolve => {
         if (window[cbName]) delete window[cbName];
@@ -127,34 +147,39 @@
 
     async function guard() {
       const { data: { session }, error } = await supabase.auth.getSession();
-      if (error) { showErr(error); return; }
+      if (error) { showErr(error.message || error); }
       if (!session) { location.href = "login.html"; return; }
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
-      if (userErr) { showErr(userErr); return; }
+      if (userErr) { showErr(userErr.message || userErr); return; }
       currentUser = user;
     }
 
     async function fetchAll() {
-      const { data: itemsData, error: itemsErr } = await supabase
-        .from("watchlist_items")
-        .select("id, ticker, notes, created_at, created_by, suggested_by_name")
-        .order("created_at", { ascending: false });
-      if (itemsErr) throw itemsErr;
-      items = itemsData || [];
+      try {
+        // Select all columns, safer if schema changes
+        const { data: itemsData, error: itemsErr } = await supabase
+          .from("watchlist_items")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (itemsErr) throw itemsErr;
+        items = itemsData || [];
 
-      const { data: votesData, error: votesErr } = await supabase
-        .from("watchlist_votes")
-        .select("item_id, user_id, value");
-      if (votesErr) throw votesErr;
-      votes = votesData || [];
+        const { data: votesData, error: votesErr } = await supabase
+          .from("watchlist_votes")
+          .select("item_id, user_id, value");
+        if (votesErr) throw votesErr;
+        votes = votesData || [];
 
-      myVotes = votes.filter(v => v.user_id === currentUser.id);
+        myVotes = votes.filter(v => v.user_id === currentUser.id);
 
-      const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
-      pctMap = {};
-      if (uniqueTickers) {
-        try { pctMap = await loadPctJSONP(uniqueTickers); }
-        catch (e) { console.warn("Sheet percent load failed", e); }
+        const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+        pctMap = {};
+        if (uniqueTickers) {
+          try { pctMap = await loadPctJSONP(uniqueTickers); }
+          catch (e) { console.warn("Sheet percent load failed", e); }
+        }
+      } catch (e) {
+        showErr(e.message || e);
       }
     }
 
@@ -185,15 +210,81 @@
       return merged;
     }
 
+    /* ---------------- Leaderboard compute and render ---------------- */
+
+    function computeLeaderboard() {
+      // Build an array of { name, count, avgPct } from items and pctMap
+      const byUser = new Map();
+      for (const it of items) {
+        const ticker = it.ticker || "";
+        const rec = pctMap[ticker];
+        const pct = rec && typeof rec.pct === "number" ? rec.pct : null;
+        if (pct === null) continue;
+
+        const name = (it.suggested_by_name && it.suggested_by_name.trim())
+          ? it.suggested_by_name.trim()
+          : "Someone";
+
+        const stat = byUser.get(name) || { name, count: 0, sumPct: 0 };
+        stat.count += 1;
+        stat.sumPct += pct; // pct is decimal, for example 0.1234
+        byUser.set(name, stat);
+      }
+
+      const rows = Array.from(byUser.values())
+        .map(r => ({ name: r.name, count: r.count, avgPct: r.count ? r.sumPct / r.count : 0 }))
+        .sort((a, b) => b.avgPct - a.avgPct || b.count - a.count || a.name.localeCompare(b.name));
+
+      return rows;
+    }
+
+    function renderLeaderboard() {
+      const wrap = document.getElementById("leaderWrap");
+      const rows = computeLeaderboard();
+
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="muted">No data yet, add a few tickers first</div>`;
+        return;
+      }
+
+      const html = [
+        `<table>`,
+        `<thead><tr><th>Rank</th><th>Member</th><th>Average % change</th><th>Picks</th></tr></thead>`,
+        `<tbody>`,
+        ...rows.map((r, i) => {
+          const pct = r.avgPct * 100;
+          const cls = pct >= 0 ? "avg up" : "avg down";
+          return `<tr>
+            <td>${i + 1}</td>
+            <td>${escapeHtml(r.name)}</td>
+            <td class="${cls}">${pct.toFixed(2)}%</td>
+            <td><span class="chip">${r.count}</span></td>
+          </tr>`;
+        }),
+        `</tbody></table>`
+      ].join("");
+
+      wrap.innerHTML = html;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => {
+        const map = { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" };
+        return map[c] || c;
+      });
+    }
+
+    /* ---------------- List render and interactions ---------------- */
+
     function renderList() {
       const q = (document.getElementById("search").value || "").trim().toUpperCase();
       let merged = mergeSorted();
-      if (q) merged = merged.filter(i => i.ticker.toUpperCase().includes(q));
+      if (q) merged = merged.filter(i => i.ticker && i.ticker.toUpperCase().includes(q));
 
       const list = document.getElementById("list");
       list.innerHTML = "";
       merged.forEach(it => {
-        const suggester = it.suggested_by_name ? it.suggested_by_name : "Someone";
+        const suggester = it.suggested_by_name || "Someone";
         const el = document.createElement("div");
         el.className = "item";
         el.innerHTML = `
@@ -202,11 +293,11 @@
             <div class="sub">votes</div>
           </div>
           <div class="grow">
-            <div class="ticker">${it.ticker}</div>
-            <div class="muted">Suggested by ${suggester}</div>
-            <div class="muted">${it.notes || ""}</div>
+            <div class="ticker">${it.ticker || ""}</div>
+            <div class="muted">Suggested by ${escapeHtml(suggester)}</div>
+            <div class="muted">${escapeHtml(it.notes || "")}</div>
           </div>
-          <div class="scorebox">${pctBadge(it.ticker)}</div>
+          <div class="scorebox">${pctBadge(it.ticker || "")}</div>
           <div class="right">
             <button class="vote ${it.myVote === 1 ? "active" : ""}" data-id="${it.id}">Vote</button>
           </div>
@@ -220,17 +311,24 @@
     }
 
     async function onVote(itemId) {
-      const current = myVotes.find(m => m.item_id === itemId);
-      if (current) {
-        await supabase.from("watchlist_votes").delete().match({ item_id: itemId, user_id: currentUser.id });
-      } else {
-        await supabase.from("watchlist_votes").upsert(
-          { item_id: itemId, user_id: currentUser.id, value: 1 },
-          { onConflict: "item_id,user_id" }
-        );
+      try {
+        const current = myVotes.find(m => m.item_id === itemId);
+        if (current) {
+          const { error } = await supabase.from("watchlist_votes").delete().match({ item_id: itemId, user_id: currentUser.id });
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("watchlist_votes").upsert(
+            { item_id: itemId, user_id: currentUser.id, value: 1 },
+            { onConflict: "item_id,user_id" }
+          );
+          if (error) throw error;
+        }
+        await fetchAll();
+        renderLeaderboard();
+        renderList();
+      } catch (e) {
+        showErr(e.message || e);
       }
-      await fetchAll();
-      renderList();
     }
 
     function showMsg(text, ok=true) {
@@ -246,19 +344,18 @@
       const market = document.getElementById("market").value;
       if (!t) { showMsg("Please enter a ticker", false); return; }
 
-      // derive display name
       const firstName = currentUser?.user_metadata?.first_name || "";
       const fallback = (currentUser?.email || "").split("@")[0] || "Member";
       const displayName = firstName || fallback;
 
       try {
-        // write to Supabase with suggester name
+        // Store suggester name in the row
         const { error } = await supabase
           .from("watchlist_items")
           .insert({ ticker: t, notes: n, created_by: currentUser.id, suggested_by_name: displayName });
         if (error) throw error;
 
-        // log to Google Sheet
+        // Log to sheet
         try {
           await fetch(SHEET_WEBAPP_URL, {
             method: "POST",
@@ -272,26 +369,29 @@
               market
             })
           });
-        } catch(e) {
-          console.warn("Sheet log failed", e);
-        }
+        } catch(e) { console.warn("Sheet log failed", e); }
 
         document.getElementById("ticker").value = "";
         document.getElementById("notes").value = "";
         document.getElementById("market").value = "AUTO";
         showMsg("Added");
         await fetchAll();
+        renderLeaderboard();
         renderList();
       } catch (e) {
-        showErr(e);
-        showMsg(e.message || "Could not add", false);
+        showErr(e.message || e);
+        showMsg("Could not add", false);
       }
     }
 
     function setupRealtime() {
       const channel = supabase.channel("watchlist_changes");
-      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => { await fetchAll(); renderList(); });
-      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_votes" }, async () => { await fetchAll(); renderList(); });
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => {
+        await fetchAll(); renderLeaderboard(); renderList();
+      });
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_votes" }, async () => {
+        await fetchAll(); renderLeaderboard(); renderList();
+      });
       channel.subscribe();
     }
 
@@ -302,21 +402,27 @@
     });
 
     async function init() {
-      await guard();
-      await fetchAll();
-      renderList();
-      setupRealtime();
+      try {
+        await guard();
+        await fetchAll();
+        renderLeaderboard();
+        renderList();
+        setupRealtime();
 
-      // refresh percent badges periodically
-      setInterval(async () => {
-        const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
-        if (!uniqueTickers) return;
-        try {
-          const data = await loadPctJSONP(uniqueTickers);
-          pctMap = data;
-          renderList();
-        } catch (_) {}
-      }, 60000);
+        // Refresh percents so leaderboard stays fresh
+        setInterval(async () => {
+          const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+          if (!uniqueTickers) return;
+          try {
+            const data = await loadPctJSONP(uniqueTickers);
+            pctMap = data;
+            renderLeaderboard();
+            renderList();
+          } catch (_) {}
+        }, 60000);
+      } catch (e) {
+        showErr(e.message || e);
+      }
     }
     init();
   </script>
