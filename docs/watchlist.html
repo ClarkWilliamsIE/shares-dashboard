@@ -15,11 +15,6 @@
     .card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
     .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
     .row input, .row textarea, .row select { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
-    .row textarea { width:100%; min-height:70px; resize:vertical; }
-    .btn { padding:.55rem .8rem; border-radius:10px; border:1px solid #333; background:#1f2937; color:#fff; cursor:pointer; }
-    .btn:hover { background:#273244; }
-    .btn-cta { background:#2563eb; border-color:#2563eb; }
-    .btn-cta:hover { background:#1d4ed8; }
     .grid { display:grid; grid-template-columns: 1fr; gap:.75rem; margin-top:1rem; }
     @media (min-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
     .item { display:flex; gap:.75rem; align-items:flex-start; background:#171717; border:1px solid #262626; border-radius:12px; padding:12px; }
@@ -28,7 +23,6 @@
     .ticker { font-weight:700; letter-spacing:.5px; }
     .muted { color:#9aa0a6; font-size:.9rem; }
     .grow { flex:1; }
-    .vote-row { display:flex; gap:.35rem; align-items:center; flex-wrap:wrap; }
     .vote { padding:.4rem .6rem; border-radius:10px; border:1px solid #333; background:#111; color:#fff; cursor:pointer; }
     .vote.up.active { border-color:#22c55e; }
     .vote.down.active { border-color:#ef4444; }
@@ -57,20 +51,12 @@
         </div>
         <button class="btn btn-cta" id="addBtn">Add to watchlist</button>
       </div>
-      <div class="muted">Signed in users can add tickers. Everyone signed in can vote up or down. Highest score rises to the top.</div>
+      <div class="muted">Signed in users can add tickers. Everyone who is signed in can vote. Highest score goes to the top.</div>
       <div id="msg" class="muted" style="margin-top:.5rem;"></div>
     </section>
 
     <section class="card">
       <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
-        <div class="row">
-          <label>Sort</label>
-          <select id="sort">
-            <option value="score">Score</option>
-            <option value="new">Newest</option>
-            <option value="ticker">Ticker</option>
-          </select>
-        </div>
         <div class="row">
           <label>Filter</label>
           <input id="search" placeholder="Type to filter tickers" />
@@ -81,9 +67,14 @@
   </main>
 
   <script>
+    // Set your Supabase values
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Set your Google Apps Script Web App URL here
+    // Deploy the script below as a Web App, Anyone can access
+    const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxxJKwTe82Td-rMyyJl5FkNMvuVIv30YodBfs3Unz7FtWriXZ__spA2yTkuWvDkYYg0kQ/exec";
 
     let currentUser = null;
     let items = [];
@@ -120,30 +111,24 @@
       myVotes = myVoteData || [];
     }
 
-    function merge() {
+    function mergeSorted() {
       const scoreMap = new Map(scores.map(s => [s.item_id, s.score || 0]));
       const myMap = new Map(myVotes.map(v => [v.item_id, v.value]));
-      return items.map(it => ({
+      const merged = items.map(it => ({
         ...it,
         score: scoreMap.get(it.id) || 0,
         myVote: myMap.get(it.id) || 0
       }));
+      // Always sort by score high to low, then by ticker
+      merged.sort((a,b) => b.score - a.score || a.ticker.localeCompare(b.ticker));
+      return merged;
     }
 
     function renderList() {
-      const sort = document.getElementById("sort").value;
       const q = (document.getElementById("search").value || "").trim().toUpperCase();
 
-      let merged = merge();
+      let merged = mergeSorted();
       if (q) merged = merged.filter(i => i.ticker.toUpperCase().includes(q));
-
-      if (sort === "score") {
-        merged.sort((a,b) => b.score - a.score || a.ticker.localeCompare(b.ticker));
-      } else if (sort === "ticker") {
-        merged.sort((a,b) => a.ticker.localeCompare(b.ticker));
-      } else {
-        merged.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-      }
 
       const list = document.getElementById("list");
       list.innerHTML = "";
@@ -174,7 +159,6 @@
 
     async function onVote(itemId, v) {
       const current = myVotes.find(m => m.item_id === itemId);
-      // If clicking same vote, remove vote
       if (current && current.value === v) {
         await supabase.from("watchlist_votes").delete().match({ item_id: itemId, user_id: currentUser.id });
       } else {
@@ -199,8 +183,27 @@
       const n = document.getElementById("notes").value.trim();
       if (!t) { showMsg("Please enter a ticker", false); return; }
       try {
+        // 1, write to Supabase
         const { error } = await supabase.from("watchlist_items").insert({ ticker: t, notes: n, created_by: currentUser.id });
         if (error) throw error;
+
+        // 2, log to Google Sheet
+        try {
+          await fetch(SHEET_WEBAPP_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: currentUser.email || "",
+              user_id: currentUser.id,
+              ticker: t,
+              notes: n
+            })
+          });
+        } catch(e) {
+          // Sheet logging failed, keep silent and continue
+          console.warn("Sheet log failed", e);
+        }
+
         document.getElementById("ticker").value = "";
         document.getElementById("notes").value = "";
         showMsg("Added");
@@ -211,8 +214,21 @@
       }
     }
 
+    // Realtime updates so the list always reflects current votes and items
+    function setupRealtime() {
+      const channel = supabase.channel("watchlist_changes");
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => {
+        await fetchAll();
+        renderList();
+      });
+      channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_votes" }, async () => {
+        await fetchAll();
+        renderList();
+      });
+      channel.subscribe();
+    }
+
     document.getElementById("addBtn").addEventListener("click", addItem);
-    document.getElementById("sort").addEventListener("change", renderList);
     document.getElementById("search").addEventListener("input", renderList);
     document.getElementById("btnSignOut").addEventListener("click", async () => { await supabase.auth.signOut(); location.href = "login.html"; });
 
@@ -220,6 +236,7 @@
       await guard();
       await fetchAll();
       renderList();
+      setupRealtime();
     }
     init();
   </script>
