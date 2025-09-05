@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sign in, Winnerland Members</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; padding:1.25rem; font-family: system-ui, sans-serif; background:#121212; color:#fff; }
+    .wrap { max-width:560px; margin:4rem auto; background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:1.25rem; }
+    h1 { margin:0 0 .25rem; text-align:center; }
+    p.lead { opacity:.8; text-align:center; margin:.25rem 0 1rem; }
+    form { display:grid; gap:.75rem; }
+    input, button, select { font: inherit; }
+    .row { display:grid; gap:.5rem; }
+    .row.two { grid-template-columns: 1fr 1fr; gap:.75rem; }
+    input[type="email"], input[type="password"] {
+      padding:.75rem; border-radius:8px; border:1px solid #2a2a2a; background:#141414; color:#fff;
+    }
+    button {
+      padding:.8rem 1rem; border-radius:8px; border:0; background:#2d7df6; color:#fff; cursor:pointer;
+    }
+    button.ghost { background:transparent; border:1px solid #2a2a2a; }
+    .muted { opacity:.75; font-size:.95rem; text-align:center; }
+    .hr { height:1px; background:#2a2a2a; margin:1rem 0; }
+    .msg { margin:.5rem 0 0; font-size:.95rem; }
+    .center { text-align:center; }
+    a { color:#9cc2ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Winnerland Members</h1>
+    <p class="lead">Sign in to unlock your members only Watchlist</p>
+
+    <form id="pwForm" autocomplete="on">
+      <div class="row">
+        <label>
+          <div>Email</div>
+          <input type="email" id="email" required placeholder="you@example.com" />
+        </label>
+      </div>
+      <div class="row">
+        <label>
+          <div>Password</div>
+          <input type="password" id="password" required placeholder="Your password" />
+        </label>
+      </div>
+      <div class="row two">
+        <button type="submit" id="signinBtn">Sign in</button>
+        <button type="button" id="signupBtn" class="ghost">Sign up</button>
+      </div>
+      <div class="msg" id="pwMsg"></div>
+    </form>
+
+    <div class="hr"></div>
+
+    <form id="magicForm" autocomplete="off">
+      <div class="row">
+        <label>
+          <div>Email, one time code</div>
+          <input type="email" id="magicEmail" required placeholder="you@example.com" />
+        </label>
+      </div>
+      <button type="submit">Send magic link</button>
+      <div class="msg" id="magicMsg"></div>
+    </form>
+
+    <p class="muted">
+      Already signed in on this browser, <a href="members.html">go to members</a>.
+    </p>
+    <div class="center">
+      <p class="muted">By continuing you agree to the rules for the group shares dashboard</p>
+    </div>
+  </div>
+
+  <!-- Supabase and shared auth -->
+  <script type="module" src="auth.js"></script>
+  <script type="module">
+    const { supabase, getSession } = window.__auth__;
+
+    // If already signed in, skip to members
+    (async () => {
+      if (await getSession()) window.location.href = "members.html";
+    })();
+
+    const emailEl = document.getElementById("email");
+    const pwEl = document.getElementById("password");
+    const pwMsg = document.getElementById("pwMsg");
+    const signinBtn = document.getElementById("signinBtn");
+    const signupBtn = document.getElementById("signupBtn");
+
+    const magicEmailEl = document.getElementById("magicEmail");
+    const magicMsg = document.getElementById("magicMsg");
+
+    // Email, password sign in
+    document.getElementById("pwForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      pwMsg.textContent = "Signing in...";
+      const { error } = await supabase.auth.signInWithPassword({
+        email: emailEl.value.trim(),
+        password: pwEl.value
+      });
+      if (error) {
+        pwMsg.textContent = "Sign in failed, " + error.message;
+      } else {
+        pwMsg.textContent = "Success, redirecting...";
+        window.location.href = "members.html";
+      }
+    });
+
+    // Email, password sign up
+    signupBtn.addEventListener("click", async () => {
+      pwMsg.textContent = "Creating account...";
+      const { error } = await supabase.auth.signUp({
+        email: emailEl.value.trim(),
+        password: pwEl.value
+      });
+      if (error) {
+        pwMsg.textContent = "Sign up failed, " + error.message;
+      } else {
+        pwMsg.textContent = "Account created, check your inbox to confirm if required, then sign in.";
+      }
+    });
+
+    // Magic link sign in
+    document.getElementById("magicForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      magicMsg.textContent = "Sending link...";
+      const { error } = await supabase.auth.signInWithOtp({
+        email: magicEmailEl.value.trim(),
+        options: { emailRedirectTo: new URL("members.html", window.location.href).href }
+      });
+      magicMsg.textContent = error ? "Error, " + error.message : "Check your email, open the link to finish sign in.";
+    });
+  </script>
+</body>
+</html>
