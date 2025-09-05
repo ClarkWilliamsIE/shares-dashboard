@@ -35,7 +35,7 @@
     .ok { color:#86efac; }
     .error { color:#fca5a5; }
     .topbar { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-bottom:.75rem; }
-    #err { margin:.5rem 0; color:#fca5a5; display:none; white-space:pre-wrap; }
+    #err { margin:.5rem 0; color:#fca5a5; display:none; }
     .pct { font-weight:700; }
     .pct.up { color:#22c55e; }
     .pct.down { color:#ef4444; }
@@ -62,11 +62,25 @@
   </header>
 
   <main>
-    <!-- Add to watchlist, ticker only -->
+    <!-- Add form -->
     <section class="card" style="margin-bottom:1rem;">
       <div class="topbar">
         <div class="row" style="flex:1;">
           <input id="ticker" placeholder="Ticker, for example AAPL" />
+          <select id="market" aria-label="Market">
+            <option value="AUTO" selected>Market, auto</option>
+            <option value="NASDAQ">NASDAQ</option>
+            <option value="NYSE">NYSE</option>
+            <option value="NZE">NZX</option>
+            <option value="ASX">ASX</option>
+            <option value="LON">LSE</option>
+            <option value="TSE">TSX</option>
+            <option value="CVE">TSX Venture</option>
+            <option value="AMS">Euronext Amsterdam</option>
+            <option value="EPA">Euronext Paris</option>
+            <option value="FRA">Frankfurt</option>
+          </select>
+          <input id="notes" placeholder="Notes, for example why this is interesting" style="flex:1;" />
         </div>
         <button class="btn btn-cta" id="addBtn">Add to watchlist</button>
       </div>
@@ -85,16 +99,20 @@
       </div>
     </section>
 
-    <!-- Poll builder, custom question optional, start 48 hour poll -->
+    <!-- Poll builder -->
     <section class="card" id="pollBuilderCard">
       <h2 style="margin:.25rem 0 .5rem 0; font-size:1rem;">Create a poll</h2>
       <div class="row">
-        <input id="pollQuestion" placeholder="Custom question, optional" style="flex:1;" />
+        <input id="pollTitle" placeholder="Title, for example September buys" style="flex:1;" />
+        <input id="pollClose" type="datetime-local" />
       </div>
-      <div class="hint" style="margin-top:.5rem;">Click Add to poll on a ticker below, enter a purchase amount, then start the poll</div>
+      <div class="row" style="margin-top:.5rem;">
+        <textarea id="pollNote" rows="2" placeholder="Short note, optional" style="flex:1;"></textarea>
+      </div>
+      <div class="hint" style="margin-top:.5rem;">Use Add to poll on any ticker below, then click Create poll</div>
       <div class="pollitems" id="pollDraftItems"></div>
       <div class="row" style="margin-top:.5rem;">
-        <button class="btn btn-cta" id="btnCreatePoll">Start 48 hour poll</button>
+        <button class="btn btn-cta" id="btnCreatePoll">Create poll</button>
         <button class="btn" id="btnClearDraft" type="button">Clear</button>
       </div>
     </section>
@@ -110,7 +128,7 @@
       <div id="list" class="grid"></div>
     </section>
 
-    <!-- Leaderboard -->
+    <!-- Leaderboard at bottom -->
     <section class="card" style="margin-top:1rem;">
       <h2 style="margin:.25rem 0 .75rem 0; font-size:1rem;">Leaderboard, average percent change by suggester</h2>
       <div id="leaderWrap">
@@ -121,30 +139,30 @@
 
   <script>
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
+    const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby9-PQORBC7L27BItmvRVowsut2KAgcPyJxeDszODyouSxYB59pOf1TrIGm1SLQEIiccQ/exec";
+    const SHEET_WEBAPP_URL = "YOUR_APPS_SCRIPT_WEBAPP_URL_HERE";
 
     let currentUser = null;
-    let items = [];
-    let votes = [];
+    let items = [];       // watchlist items
+    let votes = [];       // watchlist votes
     let myVotes = [];
-    let pctMap = {};
+    let pctMap = {};      // { ticker: { pct, price, added, market } }
 
-    let activePoll = null;
-    let activePollItems = [];
-    let myPollVotes = [];
-    const draft = new Map();
+    // Poll state
+    let activePoll = null;          // { id, title, note, closes_at, created_by, status }
+    let activePollItems = [];       // [{ id, ticker, amount, ... }]
+    let myPollVotes = [];           // [{ poll_item_id, user_id, value }]
+    const draft = new Map();        // ticker -> { ticker, amount }
 
     /* Utilities */
     function showErr(e) {
       console.error(e);
       const box = document.getElementById("err");
-      const txt = typeof e === "string" ? e : (e && e.message) ? e.message : JSON.stringify(e);
-      box.textContent = txt;
+      box.textContent = typeof e === "string" ? e : (e && e.message) ? e.message : "Something went wrong";
       box.style.display = "block";
-      setTimeout(() => { box.style.display = "none"; }, 8000);
+      setTimeout(() => { box.style.display = "none"; }, 5000);
     }
     function showMsg(text, ok=true) {
       const m = document.getElementById("msg");
@@ -157,7 +175,7 @@
     }
     function fmtPct(p) { return (p * 100).toFixed(2) + "%"; }
 
-    // JSONP to get percent change and price from the sheet
+    // JSONP for sheet percents, avoids CORS
     function loadPctJSONP(tickers, cbName = "WL_PCT_CB") {
       return new Promise(resolve => {
         if (window[cbName]) delete window[cbName];
@@ -184,31 +202,26 @@
 
     /* Fetch watchlist and sheet data */
     async function fetchWatchlistAndPercents() {
-      items = [];
-      votes = [];
-      myVotes = [];
-      pctMap = {};
+      const { data: itemsData, error: itemsErr } = await supabase
+        .from("watchlist_items").select("*").order("created_at", { ascending: false });
+      if (itemsErr) throw itemsErr;
+      items = itemsData || [];
 
-      // safe select
-      const res = await supabase.from("watchlist_items").select("*");
-      if (res.error) showErr(res.error);
-      items = Array.isArray(res.data) ? res.data : [];
-
-      // votes
-      const vres = await supabase.from("watchlist_votes").select("item_id, user_id, value");
-      if (vres.error) showErr(vres.error);
-      votes = vres.error ? [] : (vres.data || []);
+      const { data: votesData, error: votesErr } = await supabase
+        .from("watchlist_votes").select("item_id, user_id, value");
+      if (votesErr) throw votesErr;
+      votes = votesData || [];
       myVotes = votes.filter(v => v.user_id === currentUser.id);
 
-      // sheet data
       const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+      pctMap = {};
       if (uniqueTickers) {
         try { pctMap = await loadPctJSONP(uniqueTickers); }
-        catch (e) { console.warn("Sheet percent load failed", e); }
+        catch (_) {}
       }
     }
 
-    /* Watchlist list */
+    /* Watchlist UI */
     function computeScores() {
       const m = new Map();
       for (const v of votes) m.set(v.item_id, (m.get(v.item_id) || 0) + (v.value || 0));
@@ -239,10 +252,6 @@
 
       const list = document.getElementById("list");
       list.innerHTML = "";
-      if (!merged.length) {
-        list.innerHTML = `<div class="muted">No tickers yet</div>`;
-        return;
-      }
       merged.forEach(it => {
         const suggester = it.suggested_by_name || "Someone";
         const el = document.createElement("div");
@@ -255,6 +264,7 @@
           <div class="grow">
             <div class="ticker">${escapeHtml(it.ticker || "")}</div>
             <div class="muted">Suggested by ${escapeHtml(suggester)}</div>
+            <div class="muted">${escapeHtml(it.notes || "")}</div>
           </div>
           <div class="scorebox">${pctBadge(it.ticker || "")}</div>
           <div class="right">
@@ -284,7 +294,6 @@
       }
       await fetchWatchlistAndPercents();
       renderList();
-      renderLeaderboard();
     }
 
     /* Leaderboard */
@@ -325,7 +334,7 @@
       wrap.innerHTML = html;
     }
 
-    /* Poll draft pills */
+    /* Poll builder, add tickers, set amount, create poll */
     function renderDraft() {
       const wrap = document.getElementById("pollDraftItems");
       wrap.innerHTML = "";
@@ -359,37 +368,41 @@
       draft.set(ticker, { ticker, amount: amt });
       renderDraft();
     }
-
-    /* Create poll, sets closes_at to now plus 48 hours */
     async function createPoll() {
       if (draft.size === 0) { showMsg("Add at least one ticker to the poll", false); return; }
-      const question = document.getElementById("pollQuestion").value.trim();
-      const closes_at = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+      const title = document.getElementById("pollTitle").value.trim();
+      if (!title) { showMsg("Poll title is required", false); return; }
+      const note = document.getElementById("pollNote").value.trim();
+      const closesAtRaw = document.getElementById("pollClose").value;
+      const closes_at = closesAtRaw ? new Date(closesAtRaw).toISOString() : null;
 
-      // Title is required in schema, use the question or a default
-      const autoTitle = question ? question.slice(0, 140) : "Poll";
-
+      // 1, create poll
       const { data: poll, error: pollErr } = await supabase.from("polls")
-        .insert({ title: autoTitle, note: question || null, closes_at, created_by: currentUser.id, status: "open" })
+        .insert({ title, note, closes_at, created_by: currentUser.id, status: "open" })
         .select("*").single();
       if (pollErr) { showErr(pollErr); return; }
 
+      // 2, insert items
       const itemsPayload = Array.from(draft.values()).map(d => ({
         poll_id: poll.id, ticker: d.ticker, amount: d.amount, added_by: currentUser.id
       }));
       const { error: itemErr } = await supabase.from("poll_items").insert(itemsPayload);
       if (itemErr) { showErr(itemErr); return; }
 
+      // Clear and refresh
       draft.clear();
-      document.getElementById("pollQuestion").value = "";
+      document.getElementById("pollTitle").value = "";
+      document.getElementById("pollNote").value = "";
+      document.getElementById("pollClose").value = "";
       renderDraft();
       await fetchActivePoll();
       renderActivePoll();
-      showMsg("Poll started, closes in 48 hours");
+      showMsg("Poll created");
     }
 
-    /* Active poll */
+    /* Active poll, fetch, render, vote, close */
     async function fetchActivePoll() {
+      // latest open poll
       const { data: polls, error: pollErr } = await supabase
         .from("polls").select("*").eq("status", "open").order("created_at", { ascending: false }).limit(1);
       if (pollErr) { showErr(pollErr); return; }
@@ -423,11 +436,18 @@
       const when = activePoll.closes_at ? `closes ${new Date(activePoll.closes_at).toLocaleString()}` : "no close date";
       meta.textContent = `${activePoll.title} (${when})${activePoll.note ? ", " + activePoll.note : ""}`;
 
+      const votesByItem = new Map();
+      for (const it of activePollItems) votesByItem.set(it.id, 0);
+      const { data: allVotes } = { data: myPollVotes.concat([]) }; // we only need self mark for active class
+      // We will count totals from server again below for safety
+      const totals = new Map();
+      totals.clear();
+
       wrap.innerHTML = "";
-      const rows = [];
+      const tableRows = [];
       for (const it of activePollItems) {
         const mine = myPollVotes.find(v => v.poll_item_id === it.id);
-        rows.push(`
+        tableRows.push(`
           <tr>
             <td>${escapeHtml(it.ticker)}</td>
             <td>${it.amount != null ? Number(it.amount).toLocaleString() : "-"}</td>
@@ -441,15 +461,19 @@
       wrap.innerHTML = `
         <table class="table">
           <thead><tr><th>Ticker</th><th>Proposed spend</th><th>Votes</th><th></th></tr></thead>
-          <tbody>${rows.join("")}</tbody>
+          <tbody>${tableRows.join("")}</tbody>
         </table>
       `;
 
+      // fetch accurate totals and fill
       updatePollVoteTotals();
+
+      // wire vote buttons
       wrap.querySelectorAll("[data-pvote]").forEach(btn => {
         btn.addEventListener("click", () => onPollVote(btn.getAttribute("data-pvote")));
       });
 
+      // show close button only to poll creator
       closeRow.style.display = activePoll.created_by === currentUser.id ? "" : "none";
     }
 
@@ -488,7 +512,7 @@
       showMsg("Poll closed");
     }
 
-    /* Events */
+    /* Page interactions */
     document.getElementById("btnCreatePoll").addEventListener("click", createPoll);
     document.getElementById("btnClearDraft").addEventListener("click", () => { draft.clear(); renderDraft(); });
     document.getElementById("btnSignOut").addEventListener("click", async () => { await supabase.auth.signOut(); location.href = "login.html"; });
@@ -496,20 +520,24 @@
     document.getElementById("btnClosePoll").addEventListener("click", closePoll);
     document.getElementById("addBtn").addEventListener("click", async () => {
       const t = document.getElementById("ticker").value.trim().toUpperCase();
+      const n = document.getElementById("notes").value.trim();
+      const market = document.getElementById("market").value;
       if (!t) { showMsg("Please enter a ticker", false); return; }
       const firstName = currentUser?.user_metadata?.first_name || "";
       const fallback = (currentUser?.email || "").split("@")[0] || "Member";
       const displayName = firstName || fallback;
 
-      await supabase.from("watchlist_items").insert({ ticker: t, created_by: currentUser.id, suggested_by_name: displayName });
+      await supabase.from("watchlist_items").insert({ ticker: t, notes: n, created_by: currentUser.id, suggested_by_name: displayName });
 
-      // Log to sheet quietly, no notes, no market
+      // Log to sheet quietly
       fetch(SHEET_WEBAPP_URL, {
         method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ email: currentUser.email || "", user_id: currentUser.id, ticker: t })
+        body: JSON.stringify({ email: currentUser.email || "", user_id: currentUser.id, ticker: t, notes: n, market })
       });
 
       document.getElementById("ticker").value = "";
+      document.getElementById("notes").value = "";
+      document.getElementById("market").value = "AUTO";
       await fetchWatchlistAndPercents();
       renderList();
       renderLeaderboard();
@@ -518,36 +546,32 @@
 
     /* Init */
     async function init() {
-      try {
-        await guard();
-        await fetchWatchlistAndPercents();
-        renderDraft();
-        await fetchActivePoll();
-        renderActivePoll();
-        renderList();
-        renderLeaderboard();
+      await guard();
+      await fetchWatchlistAndPercents();
+      renderDraft();
+      await fetchActivePoll();
+      renderActivePoll();
+      renderList();
+      renderLeaderboard();
 
-        // Realtime for polls
-        const ch = supabase.channel("poll_changes");
-        ch.on("postgres_changes", { event: "*", schema: "public", table: "polls" }, async () => { await fetchActivePoll(); renderActivePoll(); });
-        ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_items" }, async () => { await fetchActivePoll(); renderActivePoll(); });
-        ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, async () => { await fetchActivePoll(); renderActivePoll(); });
-        ch.subscribe();
+      // Realtime, keep polls and votes fresh
+      const ch = supabase.channel("poll_changes");
+      ch.on("postgres_changes", { event: "*", schema: "public", table: "polls" }, async () => { await fetchActivePoll(); renderActivePoll(); });
+      ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_items" }, async () => { await fetchActivePoll(); renderActivePoll(); });
+      ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, async () => { await fetchActivePoll(); renderActivePoll(); });
+      ch.subscribe();
 
-        // Refresh percent data periodically
-        setInterval(async () => {
-          const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
-          if (!uniqueTickers) return;
-          try {
-            const data = await loadPctJSONP(uniqueTickers);
-            pctMap = data;
-            renderList();
-            renderLeaderboard();
-          } catch (_) {}
-        }, 60000);
-      } catch (e) {
-        showErr(e);
-      }
+      // Refresh percents so leaderboard stays fresh
+      setInterval(async () => {
+        const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+        if (!uniqueTickers) return;
+        try {
+          const data = await loadPctJSONP(uniqueTickers);
+          pctMap = data;
+          renderList();
+          renderLeaderboard();
+        } catch (_) {}
+      }, 60000);
     }
     init();
   </script>
