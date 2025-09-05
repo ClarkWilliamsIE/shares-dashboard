@@ -3,137 +3,64 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Login</title>
+  <title>Winnerland Login</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    :root { color-scheme: dark; }
-    body { margin:0; padding:14px; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:#1e1e1e; color:#fff; }
-    h2 { margin: 0 0 8px; font-size: 1.05rem; }
-    .muted { opacity:0.85; }
-    .grid { display:grid; grid-template-columns: 1fr; gap:10px; }
-    input { padding:10px 12px; background:#121212; border:1px solid #333; color:#fff; border-radius:6px; }
-    .btn { padding:10px 12px; background:#2a2a2a; border:1px solid #3a3a3a; color:#fff; border-radius:6px; cursor:pointer; }
-    .btn:hover { background:#333; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; }
-    .sep { margin:8px 0; border-top:1px solid #2a2a2a; }
-    .right { text-align:right; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#121212; color:#fff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .card { width:min(420px, 92vw); background:#1e1e1e; padding:1.25rem; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,.35); }
+    h1 { margin:.25rem 0 1rem; text-align:center; }
+    .btn { width:100%; padding:.8rem 1rem; border:0; border-radius:10px; cursor:pointer; font-weight:600; }
+    .btn-facebook { background:#1877f2; color:#fff; }
+    .muted { color:#bdbdbd; font-size:.9rem; text-align:center; margin-top:1rem; }
+    .row { display:flex; gap:.75rem; align-items:center; justify-content:center; margin: .25rem 0 1rem; flex-wrap:wrap; }
+    input[type="text"] { width:100%; background:#111; color:#fff; border:1px solid #333; border-radius:8px; padding:.65rem .8rem; }
+    .help { font-size:.85rem; color:#aaa; line-height:1.4; }
+    .small { font-size:.8rem; color:#9aa0a6; margin-top:.75rem; }
+    .danger { color:#ff6b6b; display:none; margin-bottom:.75rem; }
   </style>
 </head>
 <body>
-  <h2 id="heading">Member login</h2>
-  <div class="grid">
-    <input id="email" type="email" placeholder="email@example.com" autocomplete="username" />
-    <input id="password" type="password" placeholder="password" autocomplete="current-password" />
+  <div class="card">
+    <h1>Sign in to Winnerland</h1>
+    <p class="help">Use Facebook to create an account in one click. If you are already signed in you will be taken straight to your dashboard.</p>
+
+    <div class="danger" id="errBox"></div>
+
     <div class="row">
-      <button id="btnSignIn" class="btn">Login</button>
-      <button id="btnSignUp" class="btn">Sign up</button>
+      <input id="siteUrl" type="text" placeholder="Site base URL for redirect, for example https://yourdomain.com" />
     </div>
-    <div id="msg" class="muted">Use your email and password to sign in</div>
-    <div class="sep"></div>
-    <div class="right">
-      <button id="btnSignOut" class="btn" style="display:none;">Sign out</button>
-    </div>
+
+    <button class="btn btn-facebook" id="facebookBtn">Continue with Facebook</button>
+    <p class="muted">By continuing you agree to the terms of use.</p>
+    <p class="small">Admin tip, in Supabase, enable Facebook under Authentication, Providers. Add the redirect URL that matches members.html, for example https://yourdomain.com/members.html. Also add this login page URL to the allowed list.</p>
   </div>
 
   <script>
-    // Clean auth hash fragments after email confirmation
-    if (location.hash && location.hash.includes("access_token")) {
-      history.replaceState({}, document.title, location.pathname + location.search);
-    }
-
-    // Supabase client
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
 
-    // Elements
-    const emailEl = document.getElementById('email');
-    const passEl = document.getElementById('password');
-    const btnSignIn = document.getElementById('btnSignIn');
-    const btnSignUp = document.getElementById('btnSignUp');
-    const btnSignOut = document.getElementById('btnSignOut');
-    const heading = document.getElementById('heading');
-    const msg = document.getElementById('msg');
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Helpers
-    function say(t) { msg.textContent = t; postHeight(); }
-    function setBusy(b) { [emailEl, passEl, btnSignIn, btnSignUp, btnSignOut].forEach(x => x.disabled = b); }
-    function postHeight() {
-      const h = document.documentElement.scrollHeight || document.body.scrollHeight || 360;
-      window.parent && window.parent.postMessage({ type:'loginHeight', height:h }, '*');
-    }
-    window.addEventListener('load', postHeight);
-    if ('ResizeObserver' in window) new ResizeObserver(postHeight).observe(document.body);
-
-    async function refreshUI() {
+    (async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      const signedIn = !!(session && session.user);
-      if (signedIn) {
-        heading.textContent = "Account";
-        emailEl.style.display = 'none';
-        passEl.style.display = 'none';
-        btnSignIn.style.display = 'none';
-        btnSignUp.style.display = 'none';
-        btnSignOut.style.display = 'inline-block';
-        say(`Signed in as ${session.user.email}`);
-        window.parent && window.parent.postMessage({ type:'auth', status:'signedIn' }, '*');
-      } else {
-        heading.textContent = "Member login";
-        emailEl.style.display = 'block';
-        passEl.style.display = 'block';
-        btnSignIn.style.display = 'inline-block';
-        btnSignUp.style.display = 'inline-block';
-        btnSignOut.style.display = 'none';
-        say("Use your email and password to sign in");
-      }
-    }
+      if (session) window.location.href = "members.html";
+    })();
 
-    // Actions
-    btnSignIn.addEventListener('click', async () => {
-      const email = emailEl.value.trim();
-      const password = passEl.value;
-      if (!email || !password) { say('Enter email and password'); return; }
-      setBusy(true);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      setBusy(false);
-      if (error) say(error.message);
-      else {
-        say('Logged in');
-        window.parent && window.parent.postMessage({ type:'auth', status:'signedIn' }, '*');
-        await refreshUI();
+    document.getElementById("facebookBtn").addEventListener("click", async () => {
+      const site = document.getElementById("siteUrl").value.trim() || window.location.origin;
+      const redirectTo = site.replace(/\/$/, "") + "/members.html";
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "facebook",
+          options: { redirectTo, queryParams: { display: "popup" } }
+        });
+        if (error) throw error;
+      } catch (err) {
+        const box = document.getElementById("errBox");
+        box.style.display = "block";
+        box.textContent = "Login failed, " + (err && err.message ? err.message : "please try again");
       }
     });
-
-    btnSignUp.addEventListener('click', async () => {
-      const email = emailEl.value.trim();
-      const password = passEl.value;
-      if (!email || !password) { say('Enter email and password'); return; }
-      setBusy(true);
-      const url = new URL(window.location.href);
-      const emailRedirectTo = url.origin + url.pathname;
-      const { error } = await supabase.auth.signUp({ email, password, options:{ emailRedirectTo } });
-      setBusy(false);
-      if (error) say(error.message);
-      else say('Check your email to confirm, then log in');
-    });
-
-    btnSignOut.addEventListener('click', async () => {
-      setBusy(true);
-      const { error } = await supabase.auth.signOut({ scope: 'global' });
-      setBusy(false);
-      if (error) say(error.message);
-      else {
-        say('Signed out');
-        window.parent && window.parent.postMessage({ type:'auth', status:'signedOut' }, '*');
-        await refreshUI();
-      }
-    });
-
-    // React to auth changes that happen outside this iframe
-    supabase.auth.onAuthStateChange(async () => { await refreshUI(); });
-
-    // Init
-    (async function init() { await refreshUI(); postHeight(); })();
   </script>
 </body>
 </html>
