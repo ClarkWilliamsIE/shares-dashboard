@@ -25,7 +25,6 @@
     .grid { display:grid; grid-template-columns: 1fr; gap:.75rem; margin-top:1rem; }
     @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } }
 
-    /* list item */
     .item {
       display:flex; flex-wrap:wrap; gap:.75rem;
       align-items:stretch;
@@ -64,7 +63,6 @@
     .topbar { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; margin-bottom:.75rem; }
     #err { margin:.5rem 0; color:#fca5a5; display:none; }
 
-    /* Loading overlay */
     .loading-veil {
       position: fixed; inset: 0;
       background: rgba(0,0,0,.45);
@@ -87,7 +85,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Archived list card */
     .archive-wrap { max-height: 280px; overflow:auto; display:flex; flex-direction:column; gap:.5rem; }
     .arch-item { display:flex; align-items:flex-start; gap:.75rem; padding:.6rem .7rem; border:1px solid #2a2a2a; border-radius:10px; background:#141414; }
     .arch-left { flex:1 1 auto; min-width:0; }
@@ -111,7 +108,6 @@
   </div>
 
   <main>
-    <!-- Add form -->
     <section class="card" style="margin-bottom:1rem;">
       <div class="topbar">
         <div class="row" style="flex:1;">
@@ -137,7 +133,6 @@
       <div id="err"></div>
     </section>
 
-    <!-- Active list -->
     <section class="card" style="margin-bottom:1rem;">
       <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
         <div class="row" style="flex:1; min-width:0;">
@@ -148,7 +143,6 @@
       <div id="list" class="grid"></div>
     </section>
 
-    <!-- Archived list in one scrollable card -->
     <section class="card" id="archiveCard">
       <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
         <h2 style="margin:0; font-size:1rem;">Archived</h2>
@@ -160,7 +154,6 @@
       <div id="archList" class="archive-wrap"></div>
     </section>
 
-    <!-- Leaderboard at the bottom -->
     <section class="card" id="leaderCard" style="margin-top:1rem;">
       <h2 style="margin:.25rem 0 0.75rem 0; font-size:1rem;">Leaderboard, average percent change by suggester</h2>
       <div id="leaderWrap">
@@ -173,33 +166,20 @@
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby9-PQORBC7L27BItmvRVowsut2KAgcPyJxeDszODyouSxYB59pOf1TrIGm1SLQEIiccQ/exec";
+    const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxxJKwTe82Td-rMyyJl5FkNMvuVIv30YodBfs3Unz7FtWriXZ__spA2yTkuWvDkYYg0kQ/exec";
 
     let currentUser = null;
     let items = [];
     let votes = [];
     let myVotes = [];
-    let pctMap = {}; // keys uppercased
+    let pctMap = {}; // uppercase keys only
 
-    /* Loading helpers */
+    /* loading */
     let loadingDepth = 0;
     const loadingEl = document.getElementById("loading");
     const loadingTextEl = document.getElementById("loadingText");
-    function setLoading(on, text) {
-      if (on) {
-        loadingDepth += 1;
-        if (text) loadingTextEl.textContent = text;
-        loadingEl.style.display = "flex";
-      } else {
-        loadingDepth = Math.max(0, loadingDepth - 1);
-        if (loadingDepth === 0) loadingEl.style.display = "none";
-      }
-    }
-    async function withLoading(label, fn) {
-      try { setLoading(true, label); return await fn(); }
-      finally { setLoading(false); }
-    }
+    function setLoading(on, text) { if (on) { loadingDepth += 1; if (text) loadingTextEl.textContent = text; loadingEl.style.display = "flex"; } else { loadingDepth = Math.max(0, loadingDepth - 1); if (loadingDepth === 0) loadingEl.style.display = "none"; } }
+    async function withLoading(label, fn) { try { setLoading(true, label); return await fn(); } finally { setLoading(false); } }
     function disable(el, state) { if (el) el.disabled = !!state; }
 
     function showErr(e) {
@@ -210,6 +190,7 @@
       setTimeout(() => { box.style.display = "none"; }, 5000);
     }
 
+    /* timeouts */
     function withTimeout(promise, ms, label) {
       let t;
       const timeout = new Promise((resolve) => {
@@ -218,52 +199,56 @@
       return Promise.race([promise, timeout]).then((v) => { clearTimeout(t); return v; });
     }
 
-    /* JSONP loader with timeout and uppercase keys */
-    function loadPctJSONP(tickers, timeoutMs = 3500, cbName = "WL_PCT_CB") {
+    /* unique JSONP per call to avoid collisions */
+    function loadPctJSONP(tickers, timeoutMs = 3500) {
+      const cbName = "WL_PCT_CB_" + Math.random().toString(36).slice(2);
       return withTimeout(new Promise(resolve => {
         let finished = false;
-        const done = (data) => {
+        let script;
+        function done(raw) {
           if (finished) return;
           finished = true;
-          const map = {};
           try {
-            const raw = data && data.data ? data.data : {};
-            for (const k in raw) {
-              if (!Object.prototype.hasOwnProperty.call(raw, k)) continue;
-              map[String(k).toUpperCase()] = raw[k];
-            }
-          } catch(_) {}
-          resolve(map);
-          // cleanup
-          try { delete window[cbName]; } catch(_) {}
-          try { if (script && script.parentNode) script.parentNode.removeChild(script); } catch(_) {}
-        };
-        if (window[cbName]) try { delete window[cbName]; } catch(_) {}
+            const map = {};
+            const data = raw && raw.data ? raw.data : {};
+            for (const k in data) if (Object.prototype.hasOwnProperty.call(data, k)) map[String(k).toUpperCase()] = data[k];
+            resolve(map);
+          } catch (_) {
+            resolve({});
+          } finally {
+            try { delete window[cbName]; } catch(_) {}
+            try { if (script && script.parentNode) script.parentNode.removeChild(script); } catch(_) {}
+          }
+        }
         window[cbName] = done;
-        const script = document.createElement("script");
+        script = document.createElement("script");
         script.src = SHEET_WEBAPP_URL + "?tickers=" + encodeURIComponent(tickers) + "&callback=" + cbName + "&ts=" + Date.now();
         script.onerror = () => done({});
         document.head.appendChild(script);
       }), timeoutMs, "sheet jsonp").then(v => v === "__TIMEOUT__" ? {} : v);
     }
 
+    /* auth */
     async function guard() {
-      const sessionRes = await withTimeout(supabase.auth.getSession(), 5000, "getSession");
-      const session = sessionRes?.data?.session || null;
+      const sess = await withTimeout(supabase.auth.getSession(), 5000, "getSession");
+      const session = sess?.data?.session;
       if (!session) { location.href = "login.html"; return; }
-      const userRes = await withTimeout(supabase.auth.getUser(), 5000, "getUser");
-      const user = userRes?.data?.user || null;
-      if (!user) { location.href = "login.html"; return; }
-      currentUser = user;
+      const usr = await withTimeout(supabase.auth.getUser(), 5000, "getUser");
+      currentUser = usr?.data?.user;
+      if (!currentUser) { location.href = "login.html"; return; }
     }
 
+    /* versioned fetch, only latest applies */
+    let fetchVersion = 0;
     async function fetchAll() {
+      const myVer = ++fetchVersion;
       try {
         const itemsRes = await withTimeout(
           supabase.from("watchlist_items").select("*").order("created_at", { ascending: false }),
           6000,
           "items"
         );
+        if (myVer !== fetchVersion) return;
         if (itemsRes !== "__TIMEOUT__" && itemsRes?.error) throw itemsRes.error;
         items = itemsRes && itemsRes !== "__TIMEOUT__" ? (itemsRes.data || []) : [];
 
@@ -272,17 +257,22 @@
           6000,
           "votes"
         );
+        if (myVer !== fetchVersion) return;
         if (votesRes !== "__TIMEOUT__" && votesRes?.error) throw votesRes.error;
         votes = votesRes && votesRes !== "__TIMEOUT__" ? (votesRes.data || []) : [];
-
         myVotes = votes.filter(v => v.user_id === currentUser.id);
 
         const uniqueTickers = Array.from(new Set(items.map(i => (i.ticker || "").toUpperCase()).filter(Boolean))).join(",");
-        pctMap = {};
         if (uniqueTickers) {
-          pctMap = await loadPctJSONP(uniqueTickers, 3500);
+          const pct = await loadPctJSONP(uniqueTickers, 3500);
+          if (myVer !== fetchVersion) return;
+          pctMap = pct;
+        } else {
+          pctMap = {};
         }
-      } catch (e) { showErr(e.message || e); }
+      } catch (e) {
+        showErr(e.message || e);
+      }
     }
 
     function computeScores() {
@@ -292,10 +282,8 @@
     }
 
     function pctFor(ticker) {
-      const key = String(ticker || "").toUpperCase();
-      const rec = pctMap[key];
-      if (!rec || typeof rec.pct !== "number") return null;
-      return rec;
+      const rec = pctMap[String(ticker || "").toUpperCase()];
+      return (rec && typeof rec.pct === "number") ? rec : null;
     }
 
     function pctBadge(ticker) {
@@ -325,7 +313,6 @@
       return arr;
     }
 
-    /* Leaderboard includes archived */
     function computeLeaderboard() {
       const byUser = new Map();
       for (const it of items) {
@@ -334,7 +321,7 @@
         const name = it.suggested_by_name && it.suggested_by_name.trim() ? it.suggested_by_name.trim() : "Someone";
         const stat = byUser.get(name) || { name, count: 0, sumPct: 0 };
         stat.count += 1;
-        stat.sumPct += rec.pct; // decimal
+        stat.sumPct += rec.pct;
         byUser.set(name, stat);
       }
       const rows = Array.from(byUser.values())
@@ -369,11 +356,8 @@
       wrap.innerHTML = html;
     }
 
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c] || c));
-    }
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c] || c)); }
 
-    /* Active list */
     function renderActiveList() {
       const q = (document.getElementById("search").value || "").trim().toUpperCase();
       let merged = mergeSortedActive();
@@ -406,7 +390,6 @@
         list.appendChild(el);
       });
 
-      // handlers
       list.querySelectorAll(".vote").forEach(btn => {
         btn.addEventListener("click", async () => {
           if (btn.disabled) return;
@@ -425,7 +408,6 @@
       });
     }
 
-    /* Archived list, no comments, show percent */
     function renderArchivedList() {
       const container = document.getElementById("archList");
       const arr = listArchivedFiltered();
@@ -462,14 +444,19 @@
       });
     }
 
-    /* Actions */
     async function setArchived(itemId, state) {
       const res = await withTimeout(
         supabase.from("watchlist_items").update({ archived: !!state }).eq("id", itemId),
         6000,
         "archive toggle"
       );
-      if (res !== "__TIMEOUT__" && res?.error) showErr(res.error.message || res.error);
+      if (res === "__TIMEOUT__") {
+        showErr("Archive update timed out");
+      } else if (res?.error) {
+        // helpful message if RLS blocks updates
+        const msg = res.error.message || String(res.error);
+        showErr(msg.includes("row level security") ? "You do not have permission to update this item" : msg);
+      }
       await fetchAll();
       renderLeaderboard();
       renderActiveList();
@@ -530,7 +517,6 @@
           );
           if (ins !== "__TIMEOUT__" && ins?.error) throw ins.error;
 
-          // best effort sheet log
           try {
             await withTimeout(fetch(SHEET_WEBAPP_URL, {
               method: "POST",
@@ -557,7 +543,6 @@
       }
     }
 
-    /* Realtime */
     function setupRealtime() {
       const channel = supabase.channel("watchlist_changes");
       channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => {
@@ -569,26 +554,16 @@
       channel.subscribe();
     }
 
-    function debounce(fn, ms) {
-      let t = null;
-      return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(null, args), ms); };
-    }
+    function debounce(fn, ms) { let t = null; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(null, args), ms); }; }
 
     document.getElementById("addBtn").addEventListener("click", addItem);
     document.getElementById("search").addEventListener("input", debounce(renderActiveList, 200));
     document.getElementById("archSearch").addEventListener("input", debounce(renderArchivedList, 200));
-    document.getElementById("btnSignOut").addEventListener("click", async () => {
-      await supabase.auth.signOut(); location.href = "login.html";
-    });
+    document.getElementById("btnSignOut").addEventListener("click", async () => { await supabase.auth.signOut(); location.href = "login.html"; });
 
     async function init() {
       await withLoading("Loading watchlist", async () => {
-        const sess = await supabase.auth.getSession();
-        if (!sess?.data?.session) { location.href = "login.html"; return; }
-        const usr = await supabase.auth.getUser();
-        if (!usr?.data?.user) { location.href = "login.html"; return; }
-        currentUser = usr.data.user;
-
+        await guard();
         await fetchAll();
         renderLeaderboard();
         renderActiveList();
@@ -596,12 +571,13 @@
         setupRealtime();
       });
 
-      // refresh percents
       setInterval(async () => {
         const uniqueTickers = Array.from(new Set(items.map(i => (i.ticker || "").toUpperCase()).filter(Boolean))).join(",");
         if (!uniqueTickers) return;
         try {
+          const myVer = ++fetchVersion; // bump version so only newest applies
           const data = await loadPctJSONP(uniqueTickers, 3500);
+          if (myVer !== fetchVersion) return;
           pctMap = data;
           renderLeaderboard();
           renderActiveList();
