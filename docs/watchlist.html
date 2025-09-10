@@ -44,6 +44,7 @@
     .pct { font-weight:700; }
     .pct.up { color:#22c55e; }
     .pct.down { color:#ef4444; }
+    .pct-chip { display:inline-block; padding:.1rem .45rem; border:1px solid #333; border-radius:999px; font-size:.8rem; margin-top:.2rem; }
 
     .vote, .archive, .unarchive {
       padding:.55rem .9rem;
@@ -179,7 +180,7 @@
     let items = [];
     let votes = [];
     let myVotes = [];
-    let pctMap = {};
+    let pctMap = {}; // keys uppercased
 
     /* Loading helpers */
     let loadingDepth = 0;
@@ -201,7 +202,6 @@
     }
     function disable(el, state) { if (el) el.disabled = !!state; }
 
-    /* Error helper */
     function showErr(e) {
       console.error(e);
       const box = document.getElementById("err");
@@ -210,7 +210,6 @@
       setTimeout(() => { box.style.display = "none"; }, 5000);
     }
 
-    /* Timeouts */
     function withTimeout(promise, ms, label) {
       let t;
       const timeout = new Promise((resolve) => {
@@ -219,18 +218,25 @@
       return Promise.race([promise, timeout]).then((v) => { clearTimeout(t); return v; });
     }
 
-    /* JSONP loader with timeout and cleanup */
+    /* JSONP loader with timeout and uppercase keys */
     function loadPctJSONP(tickers, timeoutMs = 3500, cbName = "WL_PCT_CB") {
       return withTimeout(new Promise(resolve => {
         let finished = false;
         const done = (data) => {
           if (finished) return;
           finished = true;
-          try { resolve(data && data.data ? data.data : {}); }
-          finally {
-            try { delete window[cbName]; } catch(_) {}
-            try { if (script && script.parentNode) script.parentNode.removeChild(script); } catch(_) {}
-          }
+          const map = {};
+          try {
+            const raw = data && data.data ? data.data : {};
+            for (const k in raw) {
+              if (!Object.prototype.hasOwnProperty.call(raw, k)) continue;
+              map[String(k).toUpperCase()] = raw[k];
+            }
+          } catch(_) {}
+          resolve(map);
+          // cleanup
+          try { delete window[cbName]; } catch(_) {}
+          try { if (script && script.parentNode) script.parentNode.removeChild(script); } catch(_) {}
         };
         if (window[cbName]) try { delete window[cbName]; } catch(_) {}
         window[cbName] = done;
@@ -241,7 +247,6 @@
       }), timeoutMs, "sheet jsonp").then(v => v === "__TIMEOUT__" ? {} : v);
     }
 
-    /* Auth guard */
     async function guard() {
       const sessionRes = await withTimeout(supabase.auth.getSession(), 5000, "getSession");
       const session = sessionRes?.data?.session || null;
@@ -252,7 +257,6 @@
       currentUser = user;
     }
 
-    /* Fetch */
     async function fetchAll() {
       try {
         const itemsRes = await withTimeout(
@@ -273,7 +277,7 @@
 
         myVotes = votes.filter(v => v.user_id === currentUser.id);
 
-        const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+        const uniqueTickers = Array.from(new Set(items.map(i => (i.ticker || "").toUpperCase()).filter(Boolean))).join(",");
         pctMap = {};
         if (uniqueTickers) {
           pctMap = await loadPctJSONP(uniqueTickers, 3500);
@@ -287,9 +291,16 @@
       return m;
     }
 
+    function pctFor(ticker) {
+      const key = String(ticker || "").toUpperCase();
+      const rec = pctMap[key];
+      if (!rec || typeof rec.pct !== "number") return null;
+      return rec;
+    }
+
     function pctBadge(ticker) {
-      const rec = pctMap[ticker];
-      if (!rec || typeof rec.pct !== "number") return `<div class="sub muted">change n/a</div>`;
+      const rec = pctFor(ticker);
+      if (!rec) return `<div class="sub muted">change n/a</div>`;
       const pct = rec.pct * 100;
       const cls = pct >= 0 ? "pct up" : "pct down";
       const priceStr = rec.price ? Number(rec.price).toFixed(2) : "n/a";
@@ -318,14 +329,12 @@
     function computeLeaderboard() {
       const byUser = new Map();
       for (const it of items) {
-        const ticker = it.ticker || "";
-        const rec = pctMap[ticker];
-        const pct = rec && typeof rec.pct === "number" ? rec.pct : null;
-        if (pct === null) continue;
+        const rec = pctFor(it.ticker);
+        if (!rec) continue;
         const name = it.suggested_by_name && it.suggested_by_name.trim() ? it.suggested_by_name.trim() : "Someone";
         const stat = byUser.get(name) || { name, count: 0, sumPct: 0 };
         stat.count += 1;
-        stat.sumPct += pct;
+        stat.sumPct += rec.pct; // decimal
         byUser.set(name, stat);
       }
       const rows = Array.from(byUser.values())
@@ -364,7 +373,7 @@
       return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c] || c));
     }
 
-    /* Render active list */
+    /* Active list */
     function renderActiveList() {
       const q = (document.getElementById("search").value || "").trim().toUpperCase();
       let merged = mergeSortedActive();
@@ -374,6 +383,8 @@
       list.innerHTML = "";
       merged.forEach(it => {
         const suggester = it.suggested_by_name || "Someone";
+        const rec = pctFor(it.ticker);
+        const pctChip = rec ? `<span class="pct-chip ${rec.pct >= 0 ? "pct up" : "pct down"}">${(rec.pct*100).toFixed(2)}%</span>` : `<span class="pct-chip muted">n/a</span>`;
         const el = document.createElement("div");
         el.className = "item";
         el.innerHTML = `
@@ -382,7 +393,7 @@
             <div class="sub">votes</div>
           </div>
           <div class="grow">
-            <div class="ticker">${escapeHtml(it.ticker || "")}</div>
+            <div class="ticker">${escapeHtml(it.ticker || "")} ${pctChip}</div>
             <div class="muted">Suggested by ${escapeHtml(suggester)}</div>
             <div class="muted">${escapeHtml(it.notes || "")}</div>
           </div>
@@ -414,7 +425,7 @@
       });
     }
 
-    /* Render archived list */
+    /* Archived list, no comments, show percent */
     function renderArchivedList() {
       const container = document.getElementById("archList");
       const arr = listArchivedFiltered();
@@ -424,17 +435,15 @@
         return;
       }
       arr.forEach(it => {
-        const rec = pctMap[it.ticker] || null;
-        const change = rec && typeof rec.pct === "number" ? (rec.pct * 100).toFixed(2) + "%" : "n/a";
-        const cls = rec && typeof rec.pct === "number" ? (rec.pct >= 0 ? "pct up" : "pct down") : "muted";
+        const rec = pctFor(it.ticker);
+        const pctText = rec ? (rec.pct*100).toFixed(2) + "%" : "n/a";
+        const cls = rec ? (rec.pct >= 0 ? "pct up" : "pct down") : "muted";
         const el = document.createElement("div");
         el.className = "arch-item";
         el.innerHTML = `
           <div class="arch-left">
-            <div class="ticker">${escapeHtml(it.ticker || "")}</div>
+            <div class="ticker">${escapeHtml(it.ticker || "")} <span class="pct-chip ${cls}">${pctText}</span></div>
             <div class="muted">Suggested by ${escapeHtml(it.suggested_by_name || "Someone")}</div>
-            <div class="muted">${escapeHtml(it.notes || "")}</div>
-            <div class="${cls}" style="margin-top:.2rem;">${change}</div>
           </div>
           <div class="arch-actions">
             <button class="unarchive" data-id="${it.id}">Unarchive</button>
@@ -548,7 +557,7 @@
       }
     }
 
-    /* Realtime, covers archive changes too */
+    /* Realtime */
     function setupRealtime() {
       const channel = supabase.channel("watchlist_changes");
       channel.on("postgres_changes", { event: "*", schema: "public", table: "watchlist_items" }, async () => {
@@ -574,7 +583,12 @@
 
     async function init() {
       await withLoading("Loading watchlist", async () => {
-        await guard();
+        const sess = await supabase.auth.getSession();
+        if (!sess?.data?.session) { location.href = "login.html"; return; }
+        const usr = await supabase.auth.getUser();
+        if (!usr?.data?.user) { location.href = "login.html"; return; }
+        currentUser = usr.data.user;
+
         await fetchAll();
         renderLeaderboard();
         renderActiveList();
@@ -582,9 +596,9 @@
         setupRealtime();
       });
 
-      // refresh percents, keeps leaderboard and badges fresh
+      // refresh percents
       setInterval(async () => {
-        const uniqueTickers = Array.from(new Set(items.map(i => i.ticker).filter(Boolean))).join(",");
+        const uniqueTickers = Array.from(new Set(items.map(i => (i.ticker || "").toUpperCase()).filter(Boolean))).join(",");
         if (!uniqueTickers) return;
         try {
           const data = await loadPctJSONP(uniqueTickers, 3500);
