@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Member Polls</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#121212; color:#fff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; position:sticky; top:0; background:rgba(18,18,18,.9); border-bottom:1px solid #222; z-index:20; }
+    h1 { font-size:1.05rem; margin:0; }
+    main { padding:16px; max-width:1040px; margin:0 auto; }
+    .card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
+    .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    .row input, .row textarea { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
+    .btn { padding:.6rem .9rem; border-radius:10px; border:1px solid #333; background:#1f2937; color:#fff; cursor:pointer; transition:opacity .15s ease; }
+    .btn:hover { background:#273244; }
+    .btn[disabled] { opacity:.6; cursor:not-allowed; }
+    .btn-cta { background:#2563eb; border-color:#2563eb; }
+    .btn-cta:hover { background:#1d4ed8; }
+    .btn-ghost { background:#111; }
+    .muted { color:#9aa0a6; }
+    .ok { color:#86efac; }
+    .error { color:#fca5a5; }
+    .grid { display:grid; grid-template-columns: 1fr; gap:.75rem; }
+    @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } }
+
+    .poll { background:#171717; border:1px solid #262626; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:.6rem; }
+    .poll h3 { margin:0; font-size:1rem; }
+    .poll .meta { font-size:.85rem; color:#9aa0a6; display:flex; gap:.6rem; flex-wrap:wrap; }
+    .bar { height:22px; background:#0f0f0f; border:1px solid #333; border-radius:999px; overflow:hidden; position:relative; }
+    .bar > span { display:block; height:100%; background:#2563eb; }
+    .pill { display:inline-block; padding:.15rem .5rem; border:1px solid #2a2a2a; border-radius:999px; font-size:.8rem; }
+
+    .loading-veil { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
+    .loading-box { background:#1d1d1d; border:1px solid #2a2a2a; border-radius:12px; padding:14px 16px; display:flex; align-items:center; gap:.75rem; box-shadow:0 6px 24px rgba(0,0,0,.35); }
+    .spinner { width:18px; height:18px; border:3px solid #2f2f2f; border-top-color:#60a5fa; border-radius:50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .optRow { display:flex; align-items:center; gap:.4rem; }
+    .optRow input { flex:1; }
+    .voters { font-size:.85rem; color:#cbd5e1; }
+    details { background:#151515; border:1px solid #2a2a2a; border-radius:10px; padding:.6rem .7rem; }
+    summary { cursor:pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Member Polls</h1>
+    <div>
+      <button class="btn" onclick="location.href='members.html'">Back to dashboard</button>
+      <button class="btn" onclick="location.href='index.html'">Watchlist</button>
+      <button class="btn btn-ghost" id="btnSignOut">Sign out</button>
+    </div>
+  </header>
+
+  <div id="loading" class="loading-veil" aria-hidden="true">
+    <div class="loading-box">
+      <div class="spinner" aria-label="Loading"></div>
+      <div id="loadingText">Loading, please wait</div>
+    </div>
+  </div>
+
+  <main>
+    <!-- Create poll -->
+    <section class="card" style="margin-bottom:1rem;">
+      <h2 style="margin:.2rem 0 .6rem 0; font-size:1rem;">Create a poll</h2>
+      <div class="row" style="margin-bottom:.5rem;">
+        <input id="title" placeholder="Title" style="flex:2; min-width:200px;" />
+        <input id="duration" type="number" min="1" value="72" style="width:110px;" />
+        <label class="muted">hours</label>
+        <button class="btn btn-cta" id="btnCreate">Create</button>
+      </div>
+      <textarea id="body" rows="2" placeholder="Optional context" style="width:100%; margin-bottom:.5rem;"></textarea>
+      <div id="optWrap" style="display:flex; flex-direction:column; gap:.4rem;">
+        <div class="optRow"><input placeholder="Option 1" /><button class="btn" onclick="removeOpt(this)">Remove</button></div>
+        <div class="optRow"><input placeholder="Option 2" /><button class="btn" onclick="removeOpt(this)">Remove</button></div>
+      </div>
+      <div class="row" style="margin-top:.5rem;">
+        <button class="btn" id="btnAddOpt">Add option</button>
+        <div id="msg" class="muted"></div>
+      </div>
+    </section>
+
+    <!-- Lists -->
+    <section class="card" style="margin-bottom:1rem;">
+      <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
+        <h2 style="margin:0; font-size:1rem;">Active polls</h2>
+        <div class="row"><label class="muted">Filter</label><input id="searchActive" placeholder="Type to filter" /></div>
+      </div>
+      <div id="activeList" class="grid"></div>
+    </section>
+
+    <section class="card">
+      <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
+        <h2 style="margin:0; font-size:1rem;">Closed polls</h2>
+        <div class="row"><label class="muted">Filter</label><input id="searchClosed" placeholder="Type to filter" /></div>
+      </div>
+      <div id="closedList" class="grid"></div>
+    </section>
+  </main>
+
+  <script>
+    /* Supabase setup */
+    const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    /* Loading */
+    let loadingDepth = 0;
+    const loadingEl = document.getElementById("loading");
+    const loadingTextEl = document.getElementById("loadingText");
+    function setLoading(on, text) { if (on) { loadingDepth += 1; if (text) loadingTextEl.textContent = text; loadingEl.style.display = "flex"; } else { loadingDepth = Math.max(0, loadingDepth - 1); if (loadingDepth === 0) loadingEl.style.display = "none"; } }
+    async function withLoading(label, fn) { try { setLoading(true, label); return await fn(); } finally { setLoading(false); } }
+
+    const state = { user: null, polls: [], options: [], votes: [] };
+
+    function showMsg(text, ok=true) { const m = document.getElementById("msg"); m.textContent = text; m.className = ok ? "ok" : "error"; setTimeout(() => { m.textContent = ""; m.className = "muted"; }, 1800); }
+
+    function fmtTime(ts) { const d = new Date(ts); return d.toLocaleString(); }
+    function msLeft(ts) { return Math.max(0, new Date(ts).getTime() - Date.now()); }
+    function formatDuration(ms) {
+      const s = Math.floor(ms / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const r = s % 60;
+      return `${h}h ${m}m ${r}s`;
+    }
+
+    async function guard() {
+      const sess = await supabase.auth.getSession();
+      const session = sess?.data?.session;
+      if (!session) { location.href = "login.html"; return; }
+      const usr = await supabase.auth.getUser();
+      state.user = usr?.data?.user;
+      if (!state.user) { location.href = "login.html"; return; }
+    }
+
+    async function fetchAll() {
+      const polls = await supabase.from("polls").select("*").order("created_at", { ascending:false });
+      if (polls?.error) throw polls.error;
+      state.polls = polls.data || [];
+
+      const options = await supabase.from("poll_options").select("*");
+      if (options?.error) throw options.error;
+      state.options = options.data || [];
+
+      const votes = await supabase.from("poll_votes").select("poll_id, option_id, user_id, user_name, created_at");
+      if (votes?.error) throw votes.error;
+      state.votes = votes.data || [];
+    }
+
+    function getOptions(pollId) { return state.options.filter(o => o.poll_id === pollId).sort((a,b) => a.idx - b.idx); }
+    function getVotes(pollId) { return state.votes.filter(v => v.poll_id === pollId); }
+    function myVoteFor(pollId) { return state.votes.find(v => v.poll_id === pollId && v.user_id === state.user.id) || null; }
+
+    function renderLists() {
+      const qA = (document.getElementById("searchActive").value || "").trim().toLowerCase();
+      const qC = (document.getElementById("searchClosed").value || "").trim().toLowerCase();
+      const active = state.polls.filter(p => !p.closed && msLeft(p.closes_at) > 0);
+      const closed = state.polls.filter(p => p.closed || msLeft(p.closes_at) === 0);
+
+      renderList("activeList", active.filter(p => p.title.toLowerCase().includes(qA)));
+      renderList("closedList", closed.filter(p => p.title.toLowerCase().includes(qC)));
+    }
+
+    function renderList(containerId, arr) {
+      const wrap = document.getElementById(containerId);
+      wrap.innerHTML = "";
+      if (!arr.length) { wrap.innerHTML = `<div class="muted">No items</div>`; return; }
+      arr.forEach(p => wrap.appendChild(renderPoll(p)));
+    }
+
+    function totalVotesFor(pollId) { return getVotes(pollId).length; }
+
+    function renderPoll(p) {
+      const opts = getOptions(p.id);
+      const votes = getVotes(p.id);
+      const my = myVoteFor(p.id);
+      const total = Math.max(1, votes.length);
+      const el = document.createElement("div");
+      el.className = "poll";
+      el.innerHTML = `
+        <h3>${escapeHtml(p.title)}</h3>
+        ${p.body ? `<div class="muted">${escapeHtml(p.body)}</div>` : ``}
+        <div class="meta">
+          <span class="pill">Created ${fmtTime(p.created_at)}</span>
+          <span class="pill">Closes ${fmtTime(p.closes_at)}</span>
+          <span class="pill" data-countdown="${p.closes_at}"></span>
+          <span class="pill">Votes ${votes.length}</span>
+        </div>
+        <div class="opts"></div>
+        <details>
+          <summary>See who voted</summary>
+          <div class="voters">${renderVotersTable(p, opts, votes)}</div>
+        </details>
+      `;
+      const optsBox = el.querySelector('.opts');
+      opts.forEach(o => {
+        const count = votes.filter(v => v.option_id === o.id).length;
+        const pct = Math.round((count / total) * 100);
+        const row = document.createElement('div');
+        row.innerHTML = `
+          <div style="display:flex; align-items:center; gap:.5rem; margin:.35rem 0;">
+            <button class="btn ${my && my.option_id===o.id ? 'btn-cta' : ''}" data-pid="${p.id}" data-oid="${o.id}" ${msLeft(p.closes_at)===0 ? 'disabled' : ''}>Vote</button>
+            <div style="flex:1;">
+              <div style="display:flex; justify-content:space-between; font-size:.9rem;">
+                <div>${escapeHtml(o.label)}</div>
+                <div class="muted">${count} of ${total-1+1} · ${pct}%</div>
+              </div>
+              <div class="bar"><span style="width:${pct}%;"></span></div>
+            </div>
+          </div>`;
+        optsBox.appendChild(row);
+      });
+      el.querySelectorAll('button[data-pid]').forEach(btn => btn.addEventListener('click', onVoteClick));
+      return el;
+    }
+
+    function renderVotersTable(p, opts, votes) {
+      if (!votes.length) return "No votes yet";
+      const byOpt = new Map(opts.map(o => [o.id, { opt:o, people:[] }]));
+      votes.forEach(v => { const x = byOpt.get(v.option_id); if (x) x.people.push(v); });
+      const rows = Array.from(byOpt.values()).map(({opt, people}) => {
+        const names = people.map(v => escapeHtml(v.user_name || v.user_id)).join(', ');
+        return `<tr><td style="padding:.35rem .5rem; border-bottom:1px solid #2a2a2a;">${escapeHtml(opt.label)}</td><td style="padding:.35rem .5rem; border-bottom:1px solid #2a2a2a;">${names || '<span class=\"muted\">None</span>'}</td></tr>`;
+      }).join('');
+      return `<table style="width:100%; border-collapse:collapse; margin-top:.35rem;"><thead><tr><th style="text-align:left; padding:.35rem .5rem; border-bottom:1px solid #2a2a2a;">Option</th><th style="text-align:left; padding:.35rem .5rem; border-bottom:1px solid #2a2a2a;">Voters</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function escapeHtml(s) { return String(s||"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]||c)); }
+
+    async function onVoteClick(e) {
+      const btn = e.currentTarget;
+      const pollId = btn.getAttribute('data-pid');
+      const optId = btn.getAttribute('data-oid');
+      btn.disabled = true;
+      try {
+        await withLoading("Saving vote", async () => {
+          // one vote per poll, update existing or insert
+          const my = myVoteFor(pollId);
+          const displayName = (state.user?.user_metadata?.first_name || '') || ((state.user?.email||'').split('@')[0] || 'Member');
+          if (my) {
+            if (my.option_id === optId) {
+              // remove vote on second click
+              const del = await supabase.from('poll_votes').delete().match({ poll_id: pollId, user_id: state.user.id });
+              if (del?.error) throw del.error;
+            } else {
+              const up = await supabase.from('poll_votes').update({ option_id: optId, user_name: displayName }).match({ poll_id: pollId, user_id: state.user.id });
+              if (up?.error) throw up.error;
+            }
+          } else {
+            const ins = await supabase.from('poll_votes').upsert({ poll_id: pollId, option_id: optId, user_id: state.user.id, user_name: displayName }, { onConflict: 'poll_id,user_id' });
+            if (ins?.error) throw ins.error;
+          }
+          await fetchAll();
+          renderLists();
+        });
+      } catch(err) { console.error(err); alert(err.message || String(err)); }
+      finally { btn.disabled = false; }
+    }
+
+    function countdownTick() {
+      document.querySelectorAll('[data-countdown]').forEach(el => {
+        const ts = el.getAttribute('data-countdown');
+        const left = msLeft(ts);
+        el.textContent = left ? `Ends in ${formatDuration(left)}` : 'Closed';
+      });
+    }
+
+    function removeOpt(btn) { const row = btn.closest('.optRow'); if (!row) return; const wrap = document.getElementById('optWrap'); if (wrap.children.length > 2) wrap.removeChild(row); }
+
+    document.getElementById('btnAddOpt').addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'optRow';
+      row.innerHTML = '<input placeholder="Another option" /><button class="btn" onclick="removeOpt(this)">Remove</button>';
+      document.getElementById('optWrap').appendChild(row);
+    });
+
+    document.getElementById('btnCreate').addEventListener('click', async () => {
+      const title = document.getElementById('title').value.trim();
+      const body = document.getElementById('body').value.trim();
+      const hrs = Math.max(1, Number(document.getElementById('duration').value) || 72);
+      const inputs = Array.from(document.getElementById('optWrap').querySelectorAll('input'));
+      const labels = inputs.map(i => i.value.trim()).filter(Boolean);
+      if (!title) { showMsg('Please enter a title', false); return; }
+      if (labels.length < 2) { showMsg('Please add at least two options', false); return; }
+
+      try {
+        await withLoading('Creating poll', async () => {
+          const closes = new Date(Date.now() + hrs*3600*1000).toISOString();
+          const displayName = (state.user?.user_metadata?.first_name || '') || ((state.user?.email||'').split('@')[0] || 'Member');
+          const insPoll = await supabase.from('polls').insert({ title, body, created_by: state.user.id, created_by_name: displayName, closes_at: closes, closed: false }).select('id');
+          if (insPoll?.error) throw insPoll.error;
+          const pollId = insPoll.data[0].id;
+
+          const rows = labels.map((label, idx) => ({ poll_id: pollId, label, idx }));
+          const insOpts = await supabase.from('poll_options').insert(rows);
+          if (insOpts?.error) throw insOpts.error;
+
+          document.getElementById('title').value = '';
+          document.getElementById('body').value = '';
+          document.getElementById('duration').value = '72';
+          document.getElementById('optWrap').innerHTML = '<div class="optRow"><input placeholder="Option 1" /><button class="btn" onclick="removeOpt(this)">Remove</button></div><div class="optRow"><input placeholder="Option 2" /><button class="btn" onclick="removeOpt(this)">Remove</button></div>';
+
+          await fetchAll();
+          renderLists();
+          showMsg('Created');
+        });
+      } catch(err) { console.error(err); showMsg(err.message || String(err), false); }
+    });
+
+    document.getElementById('btnSignOut').addEventListener('click', async () => { await supabase.auth.signOut(); location.href = 'login.html'; });
+
+    function setupRealtime() {
+      const ch = supabase.channel('polls_realtime');
+      ch.on('postgres_changes', { event:'*', schema:'public', table:'polls' }, async () => { await fetchAll(); renderLists(); });
+      ch.on('postgres_changes', { event:'*', schema:'public', table:'poll_options' }, async () => { await fetchAll(); renderLists(); });
+      ch.on('postgres_changes', { event:'*', schema:'public', table:'poll_votes' }, async () => { await fetchAll(); renderLists(); });
+      ch.subscribe();
+    }
+
+    async function init() {
+      await withLoading('Loading polls', async () => { await guard(); await fetchAll(); renderLists(); setupRealtime(); });
+      setInterval(countdownTick, 1000);
+      countdownTick();
+    }
+
+    init();
+  </script>
+
+  <!-- Schema reference for your database, keep for dev notes
+
+  create table public.polls (
+    id uuid primary key default gen_random_uuid(),
+    title text not null,
+    body text,
+    created_by uuid not null,
+    created_by_name text,
+    created_at timestamp with time zone default now(),
+    closes_at timestamp with time zone not null,
+    closed boolean not null default false
+  );
+
+  create table public.poll_options (
+    id uuid primary key default gen_random_uuid(),
+    poll_id uuid not null references public.polls(id) on delete cascade,
+    label text not null,
+    idx int not null default 0
+  );
+
+  create table public.poll_votes (
+    id uuid primary key default gen_random_uuid(),
+    poll_id uuid not null references public.polls(id) on delete cascade,
+    option_id uuid not null references public.poll_options(id) on delete cascade,
+    user_id uuid not null,
+    user_name text,
+    created_at timestamp with time zone default now(),
+    unique(poll_id, user_id)
+  );
+
+  Row level security ideas
+  enable row level security on public.polls;
+  enable row level security on public.poll_options;
+  enable row level security on public.poll_votes;
+
+  -- everyone signed in can read
+  create policy "read polls" on public.polls for select using ( auth.role() = 'authenticated' );
+  create policy "read options" on public.poll_options for select using ( auth.role() = 'authenticated' );
+  create policy "read votes" on public.poll_votes for select using ( auth.role() = 'authenticated' );
+
+  -- create polls
+  create policy "create polls" on public.polls for insert with check ( auth.uid() is not null );
+  create policy "create options" on public.poll_options for insert with check (
+    auth.uid() is not null and exists(select 1 from public.polls p where p.id = poll_id)
+  );
+
+  -- allow vote insert or update for your own user only, and only while open
+  create policy "vote upsert" on public.poll_votes for insert with check (
+    auth.uid() = user_id and exists(select 1 from public.polls p where p.id = poll_id and p.closed = false and now() < p.closes_at)
+  );
+  create policy "vote update" on public.poll_votes for update using (
+    auth.uid() = user_id and exists(select 1 from public.polls p where p.id = poll_id and p.closed = false and now() < p.closes_at)
+  ) with check (
+    auth.uid() = user_id
+  );
+  create policy "vote delete" on public.poll_votes for delete using (
+    auth.uid() = user_id and exists(select 1 from public.polls p where p.id = poll_id and p.closed = false and now() < p.closes_at)
+  );
+
+  -- optional close policy for admins only, else use a scheduled task to set closed when time passes
+
+  -->
+</body>
+</html>
