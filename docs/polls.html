@@ -113,6 +113,8 @@
     const loadingEl = document.getElementById("loading");
     const loadingTextEl = document.getElementById("loadingText");
     function setLoading(on, text) { if (on) { loadingDepth += 1; if (text) loadingTextEl.textContent = text; loadingEl.style.display = "flex"; } else { loadingDepth = Math.max(0, loadingDepth - 1); if (loadingDepth === 0) loadingEl.style.display = "none"; } }
+    // global error reporter so silent JS errors surface
+    window.addEventListener('error', (e) => { console.error('Fatal script error', e.error || e.message || e); alert('There was a script error. Open DevTools console for details. ' + (e.message || '')); }); else { loadingDepth = Math.max(0, loadingDepth - 1); if (loadingDepth === 0) loadingEl.style.display = "none"; } }
     async function withLoading(label, fn) { try { setLoading(true, label); return await fn(); } finally { setLoading(false); } }
 
     const state = { user: null, polls: [], options: [], votes: [] };
@@ -253,18 +255,32 @@
 
     async function onVoteClick(e) {
       const btn = e.currentTarget;
+      console.log('Vote clicked', btn.getAttribute('data-oid'));
       const pollId = btn.getAttribute('data-pid');
       const optId = btn.getAttribute('data-oid');
       btn.disabled = true;
       try {
-        await withLoading("Saving vote", async () => {
-          // one vote per poll, update existing or insert
+        await withLoading('Saving vote', async () => {
           const my = myVoteFor(pollId);
           const displayName = (state.user?.user_metadata?.first_name || '') || ((state.user?.email||'').split('@')[0] || 'Member');
           if (my) {
             if (my.option_id === optId) {
-              // remove vote on second click
               const del = await supabase.from('poll_votes').delete().match({ poll_id: pollId, user_id: state.user.id });
+              if (del?.error) throw del.error;
+            } else {
+              const up = await supabase.from('poll_votes').update({ option_id: optId, user_name: displayName }).match({ poll_id: pollId, user_id: state.user.id });
+              if (up?.error) throw up.error;
+            }
+          } else {
+            const ins = await supabase.from('poll_votes').upsert({ poll_id: pollId, option_id: optId, user_id: state.user.id, user_name: displayName }, { onConflict: 'poll_id,user_id' });
+            if (ins?.error) throw ins.error;
+          }
+          await fetchAll();
+          renderLists();
+        });
+      } catch(err) { console.error(err); alert(err.message || String(err)); }
+      finally { btn.disabled = false; }
+    });
               if (del?.error) throw del.error;
             } else {
               const up = await supabase.from('poll_votes').update({ option_id: optId, user_name: displayName }).match({ poll_id: pollId, user_id: state.user.id });
@@ -299,7 +315,38 @@
     });
 
     document.getElementById('btnCreate').addEventListener('click', async () => {
+      console.log('Create clicked');
       const title = document.getElementById('title').value.trim();
+      const body = document.getElementById('body').value.trim();
+      const hrs = Math.max(1, Number(document.getElementById('duration').value) || 72);
+      const inputs = Array.from(document.getElementById('optWrap').querySelectorAll('input'));
+      const labels = inputs.map(i => i.value.trim()).filter(Boolean);
+      if (!title) { showMsg('Please enter a title', false); return; }
+      if (labels.length < 2) { showMsg('Please add at least two options', false); return; }
+
+      try {
+        await withLoading('Creating poll', async () => {
+          const closes = new Date(Date.now() + hrs*3600*1000).toISOString();
+          const displayName = (state.user?.user_metadata?.first_name || '') || ((state.user?.email||'').split('@')[0] || 'Member');
+          const insPoll = await supabase.from('polls').insert({ title, body, created_by: state.user.id, created_by_name: displayName, closes_at: closes, closed: false }).select('id');
+          if (insPoll?.error) throw insPoll.error;
+          const pollId = insPoll.data[0].id;
+
+          const rows = labels.map((label, idx) => ({ poll_id: pollId, label, idx }));
+          const insOpts = await supabase.from('poll_options').insert(rows);
+          if (insOpts?.error) throw insOpts.error;
+
+          document.getElementById('title').value = '';
+          document.getElementById('body').value = '';
+          document.getElementById('duration').value = '72';
+          document.getElementById('optWrap').innerHTML = '<div class="optRow"><input placeholder="Option 1" /><button class="btn" onclick="removeOpt(this)">Remove</button></div><div class="optRow"><input placeholder="Option 2" /><button class="btn" onclick="removeOpt(this)">Remove</button></div>';
+
+          await fetchAll();
+          renderLists();
+          showMsg('Created');
+        });
+      } catch(err) { console.error(err); showMsg(err.message || String(err), false); }
+    });
       const body = document.getElementById('body').value.trim();
       const hrs = Math.max(1, Number(document.getElementById('duration').value) || 72);
       const inputs = Array.from(document.getElementById('optWrap').querySelectorAll('input'));
@@ -342,12 +389,18 @@
     }
 
     async function init() {
-      await withLoading('Loading polls', async () => { await guard(); await fetchAll(); renderLists(); setupRealtime(); });
-      setInterval(countdownTick, 1000);
-      countdownTick();
+      try {
+        await withLoading('Loading polls', async () => { await guard(); await fetchAll(); renderLists(); setupRealtime(); });
+        setInterval(countdownTick, 1000);
+        countdownTick();
+        console.log('Polls page initialised');
+      } catch (e) {
+        console.error('Init failed', e);
+        alert('Init failed: ' + (e.message || String(e)));
+      }
     }
 
-    init();
+    document.addEventListener('DOMContentLoaded', () => { init(); });
   </script>
 
   <!-- Schema reference for your database, keep for dev notes
@@ -414,3 +467,4 @@
   -->
 </body>
 </html>
+
