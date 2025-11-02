@@ -28,7 +28,9 @@
     .muted { color:#9aa0a6; font-size:.9rem; }
     .title { font-weight:700; font-size:1rem; }
     .sep { height:1px; background:#262626; margin:.25rem 0; }
-    .option { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.45rem .55rem; border:1px solid #2a2a2a; border-radius:10px; background:#141414; }
+
+    .option { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.45rem .55rem; border:1px solid #2a2a2a; border-radius:10px; background:#141414; transition:background .15s ease, border-color .15s ease; }
+    .option.good { border-color:#22c55e; background:#0f1a12; }
     .option .left { display:flex; flex-direction:column; gap:.2rem; }
     .chips { display:flex; flex-wrap:wrap; gap:.3rem; }
     .chip { display:inline-flex; align-items:center; gap:.3rem; padding:.1rem .45rem; border:1px solid #333; border-radius:999px; font-size:.78rem; background:#0f0f0f; }
@@ -36,13 +38,14 @@
     .ended { color:#fca5a5; }
     .success { color:#86efac; }
 
-    .loading-veil { position: fixed, inset: 0, background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
+    .loading-veil { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
     .loading-box { background:#1d1d1d; border:1px solid #2a2a2a; border-radius:12px; padding:14px 16px; display:flex; align-items:center; gap:.75rem; box-shadow:0 6px 24px rgba(0,0,0,.35); }
     .spinner { width:18px; height:18px; border:3px solid #2f2f2f; border-top-color:#60a5fa; border-radius:50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .section-title { margin:.25rem 0 .5rem 0; font-size:1rem; }
     #pageErr { display:none; background:#7f1d1d; color:#fee2e2; padding:8px 12px; border-bottom:1px solid #450a0a; }
+    .badge { display:inline-block; margin-left:.4rem; padding:.08rem .4rem; border:1px solid #2a2a2a; border-radius:999px; font-size:.72rem; }
   </style>
 </head>
 <body>
@@ -106,12 +109,14 @@
   </main>
 
   <script>
-    // Your Supabase project values
+    // configuration
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
+    const GREEN_THRESHOLD = 6; // make an option green once it has this many votes
+
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // show top error bar for any runtime error
+    // error surface
     function showTopError(msg) { const el = document.getElementById('pageErr'); el.style.display = 'block'; el.textContent = `Error, ${msg}`; }
     window.addEventListener('error', e => showTopError(e.message || 'script error'));
     window.addEventListener('unhandledrejection', e => showTopError(e?.reason?.message || String(e?.reason || 'promise error')));
@@ -259,10 +264,14 @@
           const you = myVote && myVote.option_id === o.id;
           const chipHtml = arr.map(v => `<span class="chip ${v.user_id===currentUser.id?'me':''}">${escapeHtml(v.voter_name || 'Member')}</span>`).join(' ');
           const row = document.createElement('div');
-          row.className = 'option';
+          row.className = 'option' + (count >= GREEN_THRESHOLD ? ' good' : '');
           row.innerHTML = `
             <div class="left">
-              <div><strong>${escapeHtml(o.label)}</strong> <span class="muted">(${count} vote${count===1?'':'s'})</span></div>
+              <div>
+                <strong>${escapeHtml(o.label)}</strong>
+                <span class="muted">(${count} vote${count===1?'':'s'})</span>
+                ${count >= GREEN_THRESHOLD ? '<span class="badge">Popular</span>' : ''}
+              </div>
               <div class="chips">${chipHtml || '<span class="muted">No votes yet</span>'}</div>
             </div>
             <div>
@@ -298,12 +307,13 @@
     }
 
     // option inputs ui
-    function addOptionInput(value="") {
+    function addOptionInput(value) {
+      const safeValue = typeof value === 'string' ? value : '';
       const wrap = document.getElementById('optionsWrap');
       const row = document.createElement('div');
       row.className = 'row';
       row.innerHTML = `
-        <input class="opt-input" placeholder="Option" value="${value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}" style="flex:1; min-width:220px;" />
+        <input class="opt-input" placeholder="Option" value="${safeValue.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}" style="flex:1; min-width:220px;" />
         <button class="btn btn-ghost" type="button">Remove</button>
       `;
       row.querySelector('button').addEventListener('click', () => row.remove());
@@ -318,7 +328,7 @@
 
     // wire up
     document.getElementById('btnCreate').addEventListener('click', createPoll);
-    document.getElementById('btnAddOpt').addEventListener('click', addOptionInput);
+    document.getElementById('btnAddOpt').addEventListener('click', () => addOptionInput(''));
     document.getElementById('search').addEventListener('input', ()=> renderLists());
     document.getElementById('archSearch').addEventListener('input', ()=> renderLists());
     document.getElementById('btnSignOut').addEventListener('click', async () => { await supabase.auth.signOut(); location.href = 'login.html'; });
@@ -336,3 +346,4 @@
   </script>
 </body>
 </html>
+
