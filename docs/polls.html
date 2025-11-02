@@ -1,9 +1,14 @@
+<!--
+Polls feature for Watchlist Voting
+Includes: HTML, CSS, JavaScript, and Supabase SQL (at the end inside this file as a comment)
+Copy this file as polls.html next to your existing pages. Update any nav links as needed.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Member Polls</title>
+  <title>Polls</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root { color-scheme: dark; }
@@ -15,44 +20,44 @@
     .card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
     .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
     .row input, .row textarea { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
+    .row textarea { width:100%; min-height:96px; }
     .btn { padding:.6rem .9rem; border-radius:10px; border:1px solid #333; background:#1f2937; color:#fff; cursor:pointer; transition:opacity .15s ease; }
     .btn:hover { background:#273244; }
     .btn[disabled] { opacity:.6; cursor:not-allowed; }
     .btn-cta { background:#2563eb; border-color:#2563eb; }
     .btn-cta:hover { background:#1d4ed8; }
     .btn-ghost { background:#111; }
-    .muted { color:#9aa0a6; }
-    .ok { color:#86efac; }
-    .error { color:#fca5a5; }
-    .grid { display:grid; grid-template-columns: 1fr; gap:.75rem; }
+    .grid { display:grid; grid-template-columns: 1fr; gap:.75rem; margin-top:1rem; }
     @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } }
 
-    .poll { background:#171717; border:1px solid #262626; border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:.6rem; }
-    .poll h3 { margin:0; font-size:1rem; }
-    .poll .meta { font-size:.85rem; color:#9aa0a6; display:flex; gap:.6rem; flex-wrap:wrap; }
-    .bar { height:22px; background:#0f0f0f; border:1px solid #333; border-radius:999px; overflow:hidden; position:relative; }
-    .bar > span { display:block; height:100%; background:#2563eb; }
-    .pill { display:inline-block; padding:.15rem .5rem; border:1px solid #2a2a2a; border-radius:999px; font-size:.8rem; }
+    .poll { display:flex; flex-direction:column; gap:.6rem; background:#171717; border:1px solid #262626; border-radius:12px; padding:12px; }
+    .poll-head { display:flex; gap:.75rem; align-items:center; justify-content:space-between; }
+    .muted { color:#9aa0a6; font-size:.9rem; }
+    .title { font-weight:700; font-size:1rem; }
+    .sep { height:1px; background:#262626; margin:.25rem 0; }
+    .option { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.45rem .55rem; border:1px solid #2a2a2a; border-radius:10px; background:#141414; }
+    .option .left { display:flex; flex-direction:column; gap:.2rem; }
+    .chips { display:flex; flex-wrap:wrap; gap:.3rem; }
+    .chip { display:inline-flex; align-items:center; gap:.3rem; padding:.1rem .45rem; border:1px solid #333; border-radius:999px; font-size:.78rem; background:#0f0f0f; }
+    .me { border-color:#60a5fa; }
+    .ended { color:#fca5a5; }
+    .success { color:#86efac; }
 
     .loading-veil { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
     .loading-box { background:#1d1d1d; border:1px solid #2a2a2a; border-radius:12px; padding:14px 16px; display:flex; align-items:center; gap:.75rem; box-shadow:0 6px 24px rgba(0,0,0,.35); }
     .spinner { width:18px; height:18px; border:3px solid #2f2f2f; border-top-color:#60a5fa; border-radius:50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .optRow { display:flex; align-items:center; gap:.4rem; }
-    .optRow input { flex:1; }
-    .voters { font-size:.85rem; color:#cbd5e1; }
-    details { background:#151515; border:1px solid #2a2a2a; border-radius:10px; padding:.6rem .7rem; }
-    summary { cursor:pointer; }
+    .section-title { margin:.25rem 0 .5rem 0; font-size:1rem; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Member Polls</h1>
+    <h1>Polls</h1>
     <div>
       <button class="btn" onclick="location.href='members.html'">Back to dashboard</button>
-      <button class="btn" onclick="location.href='index.html'">Watchlist</button>
-      <button class="btn btn-ghost" id="btnSignOut">Sign out</button>
+      <button class="btn" onclick="location.href='watchlist.html'">Watchlist</button>
+      <button class="btn danger" id="btnSignOut">Sign out</button>
     </div>
   </header>
 
@@ -64,342 +69,423 @@
   </div>
 
   <main>
-    <!-- Create poll -->
     <section class="card" style="margin-bottom:1rem;">
-      <h2 style="margin:.2rem 0 .6rem 0; font-size:1rem;">Create a poll</h2>
-      <div class="row" style="margin-bottom:.5rem;">
-        <input id="title" placeholder="Title" style="flex:2; min-width:200px;" />
-        <input id="duration" type="number" min="1" value="72" style="width:110px;" />
-        <label class="muted">hours</label>
-        <button class="btn btn-cta" id="btnCreate" type="button">Create</button>
-      </div>
-      <textarea id="body" rows="2" placeholder="Optional context" style="width:100%; margin-bottom:.5rem;"></textarea>
-      <div id="optWrap" style="display:flex; flex-direction:column; gap:.4rem;">
-        <div class="optRow"><input placeholder="Option 1" /><button class="btn" type="button" onclick="removeOpt(this)">Remove</button></div>
-        <div class="optRow"><input placeholder="Option 2" /><button class="btn" type="button" onclick="removeOpt(this)">Remove</button></div>
+      <h2 class="section-title">Create a poll</h2>
+      <div class="row">
+        <input id="title" placeholder="Poll title" style="flex:1; min-width:220px;" />
+        <input id="duration" type="number" min="1" max="72" value="72" style="width:120px;" />
+        <label class="muted">hours, limit 72</label>
       </div>
       <div class="row" style="margin-top:.5rem;">
-        <button class="btn" id="btnAddOpt" type="button">Add option</button>
-        <div id="msg" class="muted"></div>
+        <textarea id="options" placeholder="Options, one per line"></textarea>
       </div>
+      <div class="row" style="justify-content:flex-end;">
+        <button id="btnCreate" class="btn btn-cta">Create poll</button>
+      </div>
+      <div id="createMsg" class="muted" style="margin-top:.5rem;"></div>
     </section>
 
-    <!-- Lists -->
     <section class="card" style="margin-bottom:1rem;">
       <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
-        <h2 style="margin:0; font-size:1rem;">Active polls</h2>
-        <div class="row"><label class="muted">Filter</label><input id="searchActive" placeholder="Type to filter" /></div>
+        <h2 class="section-title" style="margin:0;">Active polls</h2>
+        <div class="row">
+          <label class="muted">Filter</label>
+          <input id="search" placeholder="Type to filter" />
+        </div>
       </div>
       <div id="activeList" class="grid"></div>
     </section>
 
     <section class="card">
       <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
-        <h2 style="margin:0; font-size:1rem;">Closed polls</h2>
-        <div class="row"><label class="muted">Filter</label><input id="searchClosed" placeholder="Type to filter" /></div>
+        <h2 class="section-title" style="margin:0;">Completed</h2>
+        <div class="row">
+          <label class="muted">Filter</label>
+          <input id="archSearch" placeholder="Filter completed" />
+        </div>
       </div>
-      <div id="closedList" class="grid"></div>
+      <div id="archList" class="grid"></div>
     </section>
   </main>
 
   <script>
-    console.log('polls.html script tag loaded');
-
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    let loadingDepth = 0;
+    let currentUser = null;
+    let polls = [];
+    let options = [];
+    let votes = [];
+
     const loadingEl = document.getElementById("loading");
     const loadingTextEl = document.getElementById("loadingText");
+    let loadingDepth = 0;
     function setLoading(on, text) { if (on) { loadingDepth += 1; if (text) loadingTextEl.textContent = text; loadingEl.style.display = "flex"; } else { loadingDepth = Math.max(0, loadingDepth - 1); if (loadingDepth === 0) loadingEl.style.display = "none"; } }
     async function withLoading(label, fn) { try { setLoading(true, label); return await fn(); } finally { setLoading(false); } }
 
-    window.addEventListener('error', (e) => { console.error('Fatal script error', e.error || e.message || e); alert('There was a script error. Open DevTools console for details. ' + (e.message || '')); });
+    function showMsg(el, text, ok=true) { el.textContent = text; el.className = ok ? "success" : "ended"; setTimeout(()=>{ el.textContent = ""; el.className = "muted"; }, 2000); }
 
-    const state = { user: null, polls: [], options: [], votes: [] };
-
-    function showMsg(text, ok=true) { const m = document.getElementById("msg"); m.textContent = text; m.className = ok ? "ok" : "error"; setTimeout(() => { m.textContent = ""; m.className = "muted"; }, 1800); }
-    function fmtTime(ts) { const d = new Date(ts); return d.toLocaleString(); }
-    function msLeft(ts) { return Math.max(0, new Date(ts).getTime() - Date.now()); }
-    function formatDuration(ms) { const s = Math.floor(ms / 1000); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const r = s % 60; return `${h}h ${m}m ${r}s`; }
+    function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c] || c)); }
 
     async function guard() {
       const sess = await supabase.auth.getSession();
       const session = sess?.data?.session;
       if (!session) { location.href = "login.html"; return; }
       const usr = await supabase.auth.getUser();
-      state.user = usr?.data?.user;
-      if (!state.user) { location.href = "login.html"; return; }
+      currentUser = usr?.data?.user;
+      if (!currentUser) { location.href = "login.html"; return; }
+    }
+
+    function nowUtcIso() { return new Date().toISOString(); }
+
+    function formatCountdown(endIso) {
+      const end = new Date(endIso).getTime();
+      const diff = end - Date.now();
+      if (diff <= 0) return "Ended";
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      return `${h}h ${m}m ${s}s left`;
     }
 
     async function fetchAll() {
-      const polls = await supabase
-        .from("polls")
-        .select("id,title,body,created_by,created_by_name,created_at,closes_at,closed")
-        .order("created_at", { ascending:false });
-      if (polls?.error) throw polls.error;
-      state.polls = polls.data || [];
-
-      const options = await supabase
-        .from("poll_options")
-        .select("id,poll_id,label,idx");
-      if (options?.error) throw options.error;
-      state.options = options.data || [];
-
-      const votes = await supabase
-        .from("poll_votes")
-        .select("poll_id,option_id,user_id,user_name,created_at");
-      if (votes?.error) throw votes.error;
-      state.votes = votes.data || [];
+      const p = await supabase.from("polls").select("*").order("created_at", { ascending:false });
+      if (p.error) throw p.error;
+      polls = p.data || [];
+      const o = await supabase.from("poll_options").select("*");
+      if (o.error) throw o.error;
+      options = o.data || [];
+      const v = await supabase.from("poll_votes").select("*");
+      if (v.error) throw v.error;
+      votes = v.data || [];
     }
 
-    function getOptions(pollId) { return state.options.filter(o => o.poll_id === pollId).sort((a,b) => a.idx - b.idx); }
-    function getVotes(pollId) { return state.votes.filter(v => v.poll_id === pollId); }
-    function myVoteFor(pollId) { return state.votes.find(v => v.poll_id === pollId && v.user_id === state.user.id) || null; }
+    function isEnded(poll) { return new Date(poll.end_at).getTime() <= Date.now(); }
+
+    function myDisplayName() {
+      const firstName = currentUser?.user_metadata?.first_name || "";
+      const fallback = (currentUser?.email || "").split("@")[0] || "Member";
+      return firstName || fallback;
+    }
+
+    async function createPoll() {
+      const title = document.getElementById("title").value.trim();
+      const duration = Math.min(72, Math.max(1, Number(document.getElementById("duration").value || 72)));
+      const optsText = document.getElementById("options").value.trim();
+      const msg = document.getElementById("createMsg");
+      if (!title) { showMsg(msg, "Please enter a title", false); return; }
+      const opts = optsText.split(/\n/).map(s => s.trim()).filter(Boolean).slice(0, 20);
+      if (opts.length < 2) { showMsg(msg, "Add at least two options", false); return; }
+
+      await withLoading("Creating poll", async () => {
+        const endAt = new Date(Date.now() + duration * 3600000).toISOString();
+        const ins = await supabase.from("polls").insert({ title, created_by: currentUser.id, end_at: endAt });
+        if (ins.error) throw ins.error;
+        const poll = (ins.data && ins.data[0]) ? ins.data[0] : null;
+        if (!poll) throw new Error("Could not create poll");
+        const rows = opts.map(label => ({ poll_id: poll.id, label }));
+        const insOpt = await supabase.from("poll_options").insert(rows).select("*");
+        if (insOpt.error) throw insOpt.error;
+        document.getElementById("title").value = "";
+        document.getElementById("options").value = "";
+        document.getElementById("duration").value = 72;
+        showMsg(msg, "Poll created");
+      });
+    }
+
+    async function vote(pollId, optionId) {
+      const displayName = myDisplayName();
+      await withLoading("Submitting vote", async () => {
+        const up = await supabase.from("poll_votes").upsert({ poll_id: pollId, option_id: optionId, user_id: currentUser.id, voter_name: displayName }, { onConflict: "poll_id,user_id" });
+        if (up.error) throw up.error;
+      });
+    }
+
+    function buildIndex() {
+      const optByPoll = new Map();
+      for (const o of options) {
+        if (!optByPoll.has(o.poll_id)) optByPoll.set(o.poll_id, []);
+        optByPoll.get(o.poll_id).push(o);
+      }
+      const votesByPoll = new Map();
+      for (const v of votes) {
+        if (!votesByPoll.has(v.poll_id)) votesByPoll.set(v.poll_id, []);
+        votesByPoll.get(v.poll_id).push(v);
+      }
+      const votesByOption = new Map();
+      for (const v of votes) {
+        if (!votesByOption.has(v.option_id)) votesByOption.set(v.option_id, []);
+        votesByOption.get(v.option_id).push(v);
+      }
+      return { optByPoll, votesByPoll, votesByOption };
+    }
 
     function renderLists() {
-      const qA = (document.getElementById("searchActive").value || "").trim().toLowerCase();
-      const qC = (document.getElementById("searchClosed").value || "").trim().toLowerCase();
-      const nowActive = state.polls.filter(p => !p.closed && msLeft(p.closes_at) > 0);
-      const nowClosed = state.polls.filter(p => p.closed || msLeft(p.closes_at) === 0);
-      renderList("activeList", nowActive.filter(p => p.title.toLowerCase().includes(qA)));
-      renderList("closedList", nowClosed.filter(p => p.title.toLowerCase().includes(qC)));
-    }
+      const q = (document.getElementById("search").value || "").trim().toLowerCase();
+      const aq = (document.getElementById("archSearch").value || "").trim().toLowerCase();
+      const activeWrap = document.getElementById("activeList");
+      const archWrap = document.getElementById("archList");
+      activeWrap.innerHTML = ""; archWrap.innerHTML = "";
+      const { optByPoll, votesByPoll, votesByOption } = buildIndex();
 
-    function renderList(containerId, arr) {
-      const wrap = document.getElementById(containerId);
-      wrap.innerHTML = "";
-      if (!arr.length) { wrap.innerHTML = `<div class="muted">No items</div>`; return; }
-      arr.forEach(p => wrap.appendChild(renderPoll(p)));
-    }
+      const active = polls.filter(p => !isEnded(p) && (!q || p.title.toLowerCase().includes(q)));
+      const ended = polls.filter(p => isEnded(p) && (!aq || p.title.toLowerCase().includes(aq)));
 
-    function renderPoll(p) {
-      const opts = getOptions(p.id);
-      const votes = getVotes(p.id);
-      const my = myVoteFor(p.id);
-      const total = Math.max(1, votes.length);
-      const el = document.createElement("div");
-      el.className = "poll";
-      el.innerHTML = `
-        <h3>${escapeHtml(p.title)}</h3>
-        ${p.body ? `<div class="muted">${escapeHtml(p.body)}</div>` : ``}
-        <div class="meta">
-          <span class="pill">Created ${fmtTime(p.created_at)}</span>
-          <span class="pill">Closes ${fmtTime(p.closes_at)}</span>
-          <span class="pill" data-countdown="${p.closes_at}"></span>
-          <span class="pill">Votes ${votes.length}</span>
-        </div>
-        <div class="opts"></div>
-        <details>
-          <summary>See who voted</summary>
-          <div class="voters">${renderVotersTable(p, opts, votes)}</div>
-        </details>
-      `;
-      const optsBox = el.querySelector('.opts');
-      opts.forEach(o => {
-        const count = votes.filter(v => v.option_id === o.id).length;
-        const pct = Math.round((count / total) * 100);
-        const row = document.createElement('div');
-        row.innerHTML = `
-          <div style="display:flex; align-items:center; gap:.5rem; margin:.35rem 0;">
-            <button class="btn ${my && my.option_id===o.id ? 'btn-cta' : ''}" data-pid="${p.id}" data-oid="${o.id}" ${msLeft(p.closes_at)===0 ? 'disabled' : ''}>Vote</button>
-            <div style="flex:1;">
-              <div style="display:flex; justify-content:space-between; font-size:.9rem;">
-                <div>${escapeHtml(o.label)}</div>
-                <div class="muted">${count} of ${total} · ${pct}%</div>
-              </div>
-              <div class="bar"><span style="width:${pct}%;"></span></div>
+      function renderPoll(p, parent) {
+        const opts = (optByPoll.get(p.id) || []).slice();
+        const pVotes = votesByPoll.get(p.id) || [];
+        const myVote = pVotes.find(v => v.user_id === currentUser.id);
+        const endedState = isEnded(p);
+        const total = pVotes.length;
+        opts.sort((a,b) => a.label.localeCompare(b.label));
+        const box = document.createElement("div");
+        box.className = "poll";
+        const cd = endedState ? "Ended" : formatCountdown(p.end_at);
+        box.innerHTML = `
+          <div class="poll-head">
+            <div>
+              <div class="title">${escapeHtml(p.title)}</div>
+              <div class="muted">Ends at ${new Date(p.end_at).toLocaleString()} (${escapeHtml(cd)})</div>
             </div>
-          </div>`;
-        optsBox.appendChild(row);
-      });
-      return el;
-    }
-
-    function renderVotersTable(p, opts, votes) {
-      if (!votes.length) return "No votes yet";
-      const byOpt = new Map(opts.map(o => [o.id, { opt:o, people:[] }]));
-      votes.forEach(v => { const x = byOpt.get(v.option_id); if (x) x.people.push(v); });
-      const rows = Array.from(byOpt.values()).map(({opt, people}) => {
-        const names = people.map(v => escapeHtml(v.user_name || v.user_id)).join(', ');
-        return `<tr><td style="padding:.35rem .5rem; border-bottom:1px solid #2a2a2a;">${escapeHtml(opt.label)}</td><td style="padding:.35rem .5rem; border-bottom:1px solid #2a2a2a;">${names || '<span class=\"muted\">None</span>'}</td></tr>`;
-      }).join('');
-      return `<table style="width:100%; border-collapse:collapse; margin-top:.35rem;"><thead><tr><th style="text-align:left; padding:.35rem .5rem; border-bottom:1px solid #2a2a2a;">Option</th><th style="text-align:left; padding:.35rem .5rem; border-bottom:1px solid #2a2a2a;">Voters</th></tr></thead><tbody>${rows}</tbody></table>`;
-    }
-
-    function escapeHtml(s) { return String(s||"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]||c)); }
-
-    async function onVoteClick(btn) {
-      console.log('Vote clicked', btn.getAttribute('data-oid'));
-      const pollId = btn.getAttribute('data-pid');
-      const optId = btn.getAttribute('data-oid');
-      btn.disabled = true;
-      try {
-        await withLoading('Saving vote', async () => {
-          const my = myVoteFor(pollId);
-          const displayName = (state.user?.user_metadata?.first_name || '') || ((state.user?.email||'').split('@')[0] || 'Member');
-          if (my) {
-            if (my.option_id === optId) {
-              const del = await supabase.from('poll_votes').delete().match({ poll_id: pollId, user_id: state.user.id });
-              if (del?.error) throw del.error;
-            } else {
-              const up = await supabase.from('poll_votes').update({ option_id: optId, user_name: displayName }).match({ poll_id: pollId, user_id: state.user.id });
-              if (up?.error) throw up.error;
-            }
-          } else {
-            const ins = await supabase.from('poll_votes').upsert({ poll_id: pollId, option_id: optId, user_id: state.user.id, user_name: displayName }, { onConflict: 'poll_id,user_id' });
-            if (ins?.error) throw ins.error;
-          }
-          await fetchAll();
-          renderLists();
+            ${endedState ? '<div class="ended">Voting closed</div>' : ''}
+          </div>
+          <div class="sep"></div>
+        `;
+        opts.forEach(o => {
+          const arr = votesByOption.get(o.id) || [];
+          const count = arr.length;
+          const you = myVote && myVote.option_id === o.id;
+          const chipHtml = arr.map(v => `<span class="chip ${v.user_id===currentUser.id?'me':''}">${escapeHtml(v.voter_name || 'Member')}</span>`).join(' ');
+          const row = document.createElement('div');
+          row.className = 'option';
+          row.innerHTML = `
+            <div class="left">
+              <div><strong>${escapeHtml(o.label)}</strong> <span class="muted">(${count} vote${count===1?'':'s'})</span></n></div>
+              <div class="chips">${chipHtml || '<span class="muted">No votes yet</span>'}</div>
+            </div>
+            <div>
+              <button class="btn ${you?'btn-cta':''}" ${endedState?'disabled':''} data-poll="${p.id}" data-opt="${o.id}">${you?'Your vote':'Vote'}</button>
+            </div>
+          `;
+          box.appendChild(row);
         });
-      } catch(err) { console.error(err); alert(err.message || String(err)); }
-      finally { btn.disabled = false; }
-    }
+        parent.appendChild(box);
+      }
 
-    function countdownTick() {
-      document.querySelectorAll('[data-countdown]').forEach(el => {
-        const ts = el.getAttribute('data-countdown');
-        const left = msLeft(ts);
-        el.textContent = left ? `Ends in ${formatDuration(left)}` : 'Closed';
+      if (!active.length) activeWrap.innerHTML = '<div class="muted">No active polls</div>';
+      if (!ended.length) archWrap.innerHTML = '<div class="muted">No completed polls</div>';
+
+      active.forEach(p => renderPoll(p, activeWrap));
+      ended.forEach(p => renderPoll(p, archWrap));
+
+      document.querySelectorAll('.option .btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const pollId = btn.getAttribute('data-poll');
+          const optId = btn.getAttribute('data-opt');
+          try { await vote(pollId, optId); await fetchAll(); renderLists(); } catch(e) { alert(e.message || e); }
+        });
       });
     }
-
-    function removeOpt(btn) { const row = btn.closest('.optRow'); if (!row) return; const wrap = document.getElementById('optWrap'); if (wrap.children.length > 2) wrap.removeChild(row); }
-    window.removeOpt = removeOpt;
-
-    document.getElementById('btnAddOpt').addEventListener('click', () => {
-      const row = document.createElement('div');
-      row.className = 'optRow';
-      row.innerHTML = '<input placeholder="Another option" /><button class="btn" type="button" onclick="removeOpt(this)">Remove</button>';
-      document.getElementById('optWrap').appendChild(row);
-    });
-
-    document.getElementById('btnCreate').addEventListener('click', onCreateClick);
-    async function onCreateClick() {
-      console.log('Create clicked');
-      const title = document.getElementById('title').value.trim();
-      const body = document.getElementById('body').value.trim();
-      const hrs = Math.max(1, Number(document.getElementById('duration').value) || 72);
-      const inputs = Array.from(document.getElementById('optWrap').querySelectorAll('input'));
-      const labels = inputs.map(i => i.value.trim()).filter(Boolean);
-      if (!title) { showMsg('Please enter a title', false); return; }
-      if (labels.length < 2) { showMsg('Please add at least two options', false); return; }
-
-      try {
-        await withLoading('Creating poll', async () => {
-          const closes = new Date(Date.now() + hrs*3600*1000).toISOString();
-          const displayName = (state.user?.user_metadata?.first_name || '') || ((state.user?.email||'').split('@')[0] || 'Member');
-          const insPoll = await supabase.from('polls').insert({ title, body, created_by: state.user.id, created_by_name: displayName, closes_at: closes, closed: false }).select('id');
-          if (insPoll?.error) throw insPoll.error;
-          const pollId = insPoll.data[0].id;
-
-          const rows = labels.map((label, idx) => ({ poll_id: pollId, label, idx }));
-          const insOpts = await supabase.from('poll_options').insert(rows);
-          if (insOpts?.error) throw insOpts.error;
-
-          document.getElementById('title').value = '';
-          document.getElementById('body').value = '';
-          document.getElementById('duration').value = '72';
-          document.getElementById('optWrap').innerHTML = '<div class="optRow"><input placeholder="Option 1" /><button class="btn" type="button" onclick="removeOpt(this)">Remove</button></div><div class="optRow"><input placeholder="Option 2" /><button class="btn" type="button" onclick="removeOpt(this)">Remove</button></div>';
-
-          await fetchAll();
-          renderLists();
-          showMsg('Created');
-        });
-      } catch(err) { console.error(err); showMsg(err.message || String(err), false); }
-    }
-
-    document.getElementById('btnSignOut').addEventListener('click', async () => { await supabase.auth.signOut(); location.href = 'login.html'; });
 
     function setupRealtime() {
-      const ch = supabase.channel('polls_realtime');
-      ch.on('postgres_changes', { event:'*', schema:'public', table:'polls' }, async () => { await fetchAll(); renderLists(); });
-      ch.on('postgres_changes', { event:'*', schema:'public', table:'poll_options' }, async () => { await fetchAll(); renderLists(); });
-      ch.on('postgres_changes', { event:'*', schema:'public', table:'poll_votes' }, async () => { await fetchAll(); renderLists(); });
-      ch.subscribe();
+      const channel = supabase.channel('polls_rt');
+      channel.on('postgres_changes', { event:'*', schema:'public', table:'polls' }, async () => { await fetchAll(); renderLists(); });
+      channel.on('postgres_changes', { event:'*', schema:'public', table:'poll_options' }, async () => { await fetchAll(); renderLists(); });
+      channel.on('postgres_changes', { event:'*', schema:'public', table:'poll_votes' }, async () => { await fetchAll(); renderLists(); });
+      channel.subscribe();
     }
+
+    document.getElementById('btnCreate').addEventListener('click', createPoll);
+    document.getElementById('search').addEventListener('input', ()=> renderLists());
+    document.getElementById('archSearch').addEventListener('input', ()=> renderLists());
+    document.getElementById('btnSignOut').addEventListener('click', async () => { await supabase.auth.signOut(); location.href = 'login.html'; });
 
     async function init() {
-      try {
-        await withLoading('Loading polls', async () => { await guard(); await fetchAll(); renderLists(); setupRealtime(); });
-        setInterval(countdownTick, 1000);
-        countdownTick();
-        console.log('Polls page initialised');
-      } catch (e) {
-        console.error('Init failed', e);
-        alert('Init failed: ' + (e.message || String(e)));
-      }
+      await withLoading('Loading polls', async () => { await guard(); await fetchAll(); renderLists(); setupRealtime(); });
+      setInterval(()=> { renderLists(); }, 1000);
     }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      init();
-      document.body.addEventListener('click', (e) => {
-        const btn = e.target.closest('button[data-pid]');
-        if (btn) onVoteClick(btn);
-      });
-    });
+    init();
   </script>
-
-  <!-- Schema reference for your database, keep for dev notes
-
-  create extension if not exists pgcrypto;
-
-  create table if not exists public.polls (
-    id uuid primary key default gen_random_uuid(),
-    title text not null,
-    body text,
-    created_by uuid not null,
-    created_by_name text,
-    created_at timestamp with time zone default now(),
-    closes_at timestamp with time zone not null,
-    closed boolean not null default false
-  );
-
-  create table if not exists public.poll_options (
-    id uuid primary key default gen_random_uuid(),
-    poll_id uuid not null references public.polls(id) on delete cascade,
-    label text not null,
-    idx int not null default 0
-  );
-
-  create table if not exists public.poll_votes (
-    id uuid primary key default gen_random_uuid(),
-    poll_id uuid not null references public.polls(id) on delete cascade,
-    option_id uuid not null references public.poll_options(id) on delete cascade,
-    user_id uuid not null,
-    user_name text,
-    created_at timestamp with time zone default now(),
-    unique(poll_id, user_id)
-  );
-
-  alter table public.polls enable row level security;
-  alter table public.poll_options enable row level security;
-  alter table public.poll_votes enable row level security;
-
-  create policy if not exists "read polls" on public.polls for select using ( auth.role() = 'authenticated' );
-  create policy if not exists "read options" on public.poll_options for select using ( auth.role() = 'authenticated' );
-  create policy if not exists "read votes" on public.poll_votes for select using ( auth.role() = 'authenticated' );
-
-  create policy if not exists "create polls" on public.polls for insert with check ( auth.uid() is not null );
-  create policy if not exists "create options" on public.poll_options for insert with check (
-    auth.uid() is not null and exists(select 1 from public.polls p where p.id = poll_id)
-  );
-
-  create policy if not exists "vote insert" on public.poll_votes for insert with check (
-    auth.uid() = user_id and exists(select 1 from public.polls p where p.id = poll_id and p.closed = false and now() < p.closes_at)
-  );
-  create policy if not exists "vote update" on public.poll_votes for update using (
-    auth.uid() = user_id and exists(select 1 from public.polls p where p.id = poll_id and p.closed = false and now() < p.closes_at)
-  ) with check ( auth.uid() = user_id );
-  create policy if not exists "vote delete" on public.poll_votes for delete using (
-    auth.uid() = user_id and exists(select 1 from public.polls p where p.id = poll_id and p.closed = false and now() < p.closes_at)
-  );
-
-  notify pgrst, 'reload schema';
-
-  -->
 </body>
 </html>
+
+<!--
+====================================
+Supabase SQL, run in the SQL editor
+====================================
+This creates tables, constraints, indexes, and policies that enforce a 72 hour time limit, and allow one vote per user per poll. It also stores a snapshot of voter_name to display who voted where.
+
+Note, adjust schema names if you use a different schema. Public is assumed.
+-->
+
+<!--
+-- 1. Tables
+-->
+
+/* Polls table */
+create table if not exists public.polls (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  created_by uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  end_at timestamptz not null,
+  constraint polls_duration_max check ( end_at <= created_at + interval '72 hours' )
+);
+
+/* Options for each poll */
+create table if not exists public.poll_options (
+  id uuid primary key default gen_random_uuid(),
+  poll_id uuid not null references public.polls(id) on delete cascade,
+  label text not null,
+  created_at timestamptz not null default now()
+);
+
+/* Votes, one per user per poll, user can change vote until poll ends */
+create table if not exists public.poll_votes (
+  poll_id uuid not null references public.polls(id) on delete cascade,
+  option_id uuid not null references public.poll_options(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  voter_name text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (poll_id, user_id)
+);
+
+/* keep updated_at fresh */
+create or replace function public.touch_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;$$;
+
+drop trigger if exists trg_poll_votes_touch on public.poll_votes;
+create trigger trg_poll_votes_touch
+before update on public.poll_votes
+for each row execute procedure public.touch_updated_at();
+
+/* helpful indexes */
+create index if not exists idx_poll_options_poll on public.poll_options(poll_id);
+create index if not exists idx_poll_votes_poll on public.poll_votes(poll_id);
+create index if not exists idx_poll_votes_option on public.poll_votes(option_id);
+
+-- 2. Row level security
+alter table public.polls enable row level security;
+alter table public.poll_options enable row level security;
+alter table public.poll_votes enable row level security;
+
+/* Polls policies */
+create policy if not exists polls_select_all on public.polls
+for select using ( auth.role() = 'anon' or auth.role() = 'authenticated' );
+
+create policy if not exists polls_insert_own on public.polls
+for insert with check ( auth.uid() = created_by );
+
+create policy if not exists polls_update_own on public.polls
+for update using ( auth.uid() = created_by ) with check ( auth.uid() = created_by );
+
+create policy if not exists polls_delete_own on public.polls
+for delete using ( auth.uid() = created_by );
+
+/* Poll options policies */
+create policy if not exists options_select_all on public.poll_options
+for select using ( true );
+
+create policy if not exists options_insert_if_owner on public.poll_options
+for insert with check (
+  exists (
+    select 1 from public.polls p
+    where p.id = poll_id and p.created_by = auth.uid()
+  )
+);
+
+create policy if not exists options_update_if_owner on public.poll_options
+for update using (
+  exists (
+    select 1 from public.polls p
+    where p.id = poll_id and p.created_by = auth.uid()
+  )
+) with check (
+  exists (
+    select 1 from public.polls p
+    where p.id = poll_id and p.created_by = auth.uid()
+  )
+);
+
+create policy if not exists options_delete_if_owner on public.poll_options
+for delete using (
+  exists (
+    select 1 from public.polls p
+    where p.id = poll_id and p.created_by = auth.uid()
+  )
+);
+
+/* Votes policies, select by all, insert or update by the voter while poll is active */
+create policy if not exists votes_select_all on public.poll_votes
+for select using ( true );
+
+create policy if not exists votes_insert_if_active on public.poll_votes
+for insert with check (
+  user_id = auth.uid()
+  and exists (
+    select 1 from public.polls p
+    where p.id = poll_id and p.end_at > now()
+  )
+  and exists (
+    select 1 from public.poll_options o
+    where o.id = option_id and o.poll_id = poll_id
+  )
+);
+
+create policy if not exists votes_update_if_active on public.poll_votes
+for update using (
+  user_id = auth.uid()
+  and exists (
+    select 1 from public.polls p
+    where p.id = poll_id and p.end_at > now()
+  )
+) with check (
+  user_id = auth.uid()
+  and exists (
+    select 1 from public.polls p
+    where p.id = poll_id and p.end_at > now()
+  )
+  and exists (
+    select 1 from public.poll_options o
+    where o.id = option_id and o.poll_id = poll_id
+  )
+);
+
+create policy if not exists votes_delete_own on public.poll_votes
+for delete using ( user_id = auth.uid() );
+
+-- 3. Optional, prevent creating polls with end_at older than now, server side
+create or replace function public.polls_end_not_past()
+returns trigger language plpgsql as $$
+begin
+  if new.end_at <= now() then
+    raise exception 'end_at must be in the future';
+  end if;
+  return new;
+end;$$;
+
+drop trigger if exists trg_polls_future on public.polls;
+create trigger trg_polls_future
+before insert on public.polls
+for each row execute procedure public.polls_end_not_past();
+
+-- 4. Realtime, remember to add these tables in Supabase Realtime settings if needed
+--    public.polls, public.poll_options, public.poll_votes
+
+
+/*
+Notes
+- Client shows voter names from voter_name snapshot, change later by editing your profile logic if you want.
+- Duration constraint enforces at most 72 hours. UI defaults to 72. Users can choose less.
+- One vote per user per poll, upsert lets a voter change to another option before the poll ends.
+- Selector queries are wide open for authenticated users, adjust if you need stricter visibility.
+*/
+-->
+
 
