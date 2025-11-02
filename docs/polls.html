@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Member Polls</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>console.log('polls.html script tag loaded');</script>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -236,7 +237,7 @@
           </div>`;
         optsBox.appendChild(row);
       });
-      el.querySelectorAll('button[data-pid]').forEach(btn => btn.addEventListener('click', onVoteClick));
+      // no per element handler here, use event delegation below
       return el;
     }
 
@@ -314,8 +315,41 @@
       document.getElementById('optWrap').appendChild(row);
     });
 
-    document.getElementById('btnCreate').addEventListener('click', async () => {
+    document.getElementById('btnCreate').addEventListener('click', onCreateClick);
+
+    async function onCreateClick() {
       console.log('Create clicked');
+      const title = document.getElementById('title').value.trim();
+      const body = document.getElementById('body').value.trim();
+      const hrs = Math.max(1, Number(document.getElementById('duration').value) || 72);
+      const inputs = Array.from(document.getElementById('optWrap').querySelectorAll('input'));
+      const labels = inputs.map(i => i.value.trim()).filter(Boolean);
+      if (!title) { showMsg('Please enter a title', false); return; }
+      if (labels.length < 2) { showMsg('Please add at least two options', false); return; }
+
+      try {
+        await withLoading('Creating poll', async () => {
+          const closes = new Date(Date.now() + hrs*3600*1000).toISOString();
+          const displayName = (state.user?.user_metadata?.first_name || '') || ((state.user?.email||'').split('@')[0] || 'Member');
+          const insPoll = await supabase.from('polls').insert({ title, body, created_by: state.user.id, created_by_name: displayName, closes_at: closes, closed: false }).select('id');
+          if (insPoll?.error) throw insPoll.error;
+          const pollId = insPoll.data[0].id;
+
+          const rows = labels.map((label, idx) => ({ poll_id: pollId, label, idx }));
+          const insOpts = await supabase.from('poll_options').insert(rows);
+          if (insOpts?.error) throw insOpts.error;
+
+          document.getElementById('title').value = '';
+          document.getElementById('body').value = '';
+          document.getElementById('duration').value = '72';
+          document.getElementById('optWrap').innerHTML = '<div class="optRow"><input placeholder="Option 1" /><button class="btn" type="button" onclick="removeOpt(this)">Remove</button></div><div class="optRow"><input placeholder="Option 2" /><button class="btn" type="button" onclick="removeOpt(this)">Remove</button></div>';
+
+          await fetchAll();
+          renderLists();
+          showMsg('Created');
+        });
+      } catch(err) { console.error(err); showMsg(err.message || String(err), false); }
+    }
       const title = document.getElementById('title').value.trim();
       const body = document.getElementById('body').value.trim();
       const hrs = Math.max(1, Number(document.getElementById('duration').value) || 72);
@@ -400,7 +434,13 @@
       }
     }
 
-    document.addEventListener('DOMContentLoaded', () => { init(); });
+    document.addEventListener('DOMContentLoaded', () => { init();
+      // event delegation for all vote buttons, robust even after re-renders
+      document.body.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-pid]');
+        if (btn) { onVoteClick({ currentTarget: btn, target: btn }); }
+      });
+    });
   </script>
 
   <!-- Schema reference for your database, keep for dev notes
