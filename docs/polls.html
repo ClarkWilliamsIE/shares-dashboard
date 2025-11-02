@@ -11,8 +11,13 @@
     body { margin:0; background:#121212; color:#fff; font-family:system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
     header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; position:sticky; top:0; background:rgba(18,18,18,.9); border-bottom:1px solid #222; z-index:20; }
     h1 { font-size:1.05rem; margin:0; }
-    main { padding:16px; max-width:1040px; margin:0 auto; }
-    .card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.25); }
+    main { padding:16px; max-width:1040px; margin:0 auto; display:flex; flex-direction:column; gap:1rem; }
+
+    .card { background:#1e1e1e; border:1px solid #2a2a2a; border-radius:12px; padding:14px; box-shadow:0 2px 12px rgba(0,0,0,.25); display:flex; flex-direction:column; gap:.75rem; }
+    .card-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+    .card-tools { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+    .section-title { margin:.25rem 0; font-size:1rem; }
+
     .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
     .row input { background:#0f0f0f; color:#fff; border:1px solid #333; border-radius:10px; padding:.6rem .7rem; }
     .btn { padding:.6rem .9rem; border-radius:10px; border:1px solid #333; background:#1f2937; color:#fff; cursor:pointer; }
@@ -20,8 +25,20 @@
     .btn-cta { background:#2563eb; border-color:#2563eb; }
     .btn-cta:hover { background:#1d4ed8; }
     .btn-ghost { background:#111; }
-    .grid { display:grid; grid-template-columns: 1fr; gap:.75rem; margin-top:1rem; }
-    @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } }
+
+    /* Grid that scrolls inside the card body */
+    .scroller {
+      max-height: 460px;          /* adjust if you want more or less */
+      overflow:auto;
+      border:1px solid #262626;
+      border-radius:10px;
+      padding:.6rem;
+      background:#151515;
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:.75rem;
+    }
+    @media (min-width: 980px) { .scroller { grid-template-columns: 1fr 1fr; } }
 
     .poll { display:flex; flex-direction:column; gap:.6rem; background:#171717; border:1px solid #262626; border-radius:12px; padding:12px; }
     .poll-head { display:flex; gap:.75rem; align-items:center; justify-content:space-between; }
@@ -32,20 +49,20 @@
     .option { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.45rem .55rem; border:1px solid #2a2a2a; border-radius:10px; background:#141414; transition:background .15s ease, border-color .15s ease; }
     .option.good { border-color:#22c55e; background:#0f1a12; }
     .option .left { display:flex; flex-direction:column; gap:.2rem; }
+
     .chips { display:flex; flex-wrap:wrap; gap:.3rem; }
     .chip { display:inline-flex; align-items:center; gap:.3rem; padding:.1rem .45rem; border:1px solid #333; border-radius:999px; font-size:.78rem; background:#0f0f0f; }
     .me { border-color:#60a5fa; }
     .ended { color:#fca5a5; }
     .success { color:#86efac; }
+    .badge { display:inline-block; margin-left:.4rem; padding:.08rem .4rem; border:1px solid #2a2a2a; border-radius:999px; font-size:.72rem; }
 
     .loading-veil { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(2px); }
     .loading-box { background:#1d1d1d; border:1px solid #2a2a2a; border-radius:12px; padding:14px 16px; display:flex; align-items:center; gap:.75rem; box-shadow:0 6px 24px rgba(0,0,0,.35); }
     .spinner { width:18px; height:18px; border:3px solid #2f2f2f; border-top-color:#60a5fa; border-radius:50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .section-title { margin:.25rem 0 .5rem 0; font-size:1rem; }
     #pageErr { display:none; background:#7f1d1d; color:#fee2e2; padding:8px 12px; border-bottom:1px solid #450a0a; }
-    .badge { display:inline-block; margin-left:.4rem; padding:.08rem .4rem; border:1px solid #2a2a2a; border-radius:999px; font-size:.72rem; }
   </style>
 </head>
 <body>
@@ -68,71 +85,76 @@
   </div>
 
   <main>
-    <section class="card" style="margin-bottom:1rem;">
+    <!-- Create -->
+    <section class="card">
       <h2 class="section-title">Create a poll</h2>
       <div class="row">
         <input id="title" placeholder="Poll title" style="flex:1; min-width:220px;" />
         <input id="duration" type="number" min="1" max="72" value="72" style="width:120px;" />
         <label class="muted">hours, limit 72</label>
       </div>
-      <div class="row" style="margin-top:.5rem; align-items:flex-start;">
+      <div class="row" style="align-items:flex-start;">
         <div id="optionsWrap" style="display:flex; flex-direction:column; gap:.5rem; width:100%;"></div>
         <button id="btnAddOpt" class="btn btn-ghost" type="button">Add option</button>
       </div>
       <div class="row" style="justify-content:flex-end;">
         <button id="btnCreate" class="btn btn-cta">Create poll</button>
       </div>
-      <div id="createMsg" class="muted" style="margin-top:.5rem;"></div>
+      <div id="createMsg" class="muted"></div>
     </section>
 
-    <section class="card" style="margin-bottom:1rem;">
-      <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
+    <!-- Active -->
+    <section class="card">
+      <div class="card-head">
         <h2 class="section-title" style="margin:0;">Active polls</h2>
-        <div class="row">
+        <div class="card-tools">
           <label class="muted">Filter</label>
           <input id="search" placeholder="Type to filter" />
         </div>
       </div>
-      <div id="activeList" class="grid"></div>
+      <div id="activeList" class="scroller"></div>
     </section>
 
+    <!-- Completed -->
     <section class="card">
-      <div class="row" style="justify-content:space-between; margin-bottom:.5rem;">
+      <div class="card-head">
         <h2 class="section-title" style="margin:0;">Completed</h2>
-        <div class="row">
+        <div class="card-tools">
           <label class="muted">Filter</label>
           <input id="archSearch" placeholder="Filter completed" />
         </div>
       </div>
-      <div id="archList" class="grid"></div>
+      <div id="archList" class="scroller"></div>
     </section>
   </main>
 
   <script>
-    // configuration
+    /* config */
     const SUPABASE_URL = "https://acdlgvcxzxjvcwiqlydj.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjZGxndmN4enhqdmN3aXFseWRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2Mjc5NzksImV4cCI6MjA3MjIwMzk3OX0.9ZUURjJT73Igd2tAOv8aSZUmlkEf7DIzmOAGBSjWqCI";
-    const GREEN_THRESHOLD = 6; // make an option green once it has this many votes
+    const GREEN_THRESHOLD = 6;
 
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // error surface
+    /* page level error */
     function showTopError(msg) { const el = document.getElementById('pageErr'); el.style.display = 'block'; el.textContent = `Error, ${msg}`; }
     window.addEventListener('error', e => showTopError(e.message || 'script error'));
     window.addEventListener('unhandledrejection', e => showTopError(e?.reason?.message || String(e?.reason || 'promise error')));
 
+    /* state */
     let currentUser = null;
     let polls = [], options = [], votes = [];
 
-    // loading
+    /* loading */
     const loadingEl = document.getElementById("loading");
     const loadingTextEl = document.getElementById("loadingText");
     let loadingDepth = 0;
     function setLoading(on, text) { if (on) { loadingDepth += 1; if (text) loadingTextEl.textContent = text; loadingEl.style.display = "flex"; } else { loadingDepth = Math.max(0, loadingDepth - 1); if (loadingDepth === 0) loadingEl.style.display = "none"; } }
     async function withLoading(label, fn) { try { setLoading(true, label); return await fn(); } finally { setLoading(false); } }
-    function showMsg(el, text, ok=true) { el.textContent = text; el.className = ok ? "success" : "ended"; setTimeout(()=>{ el.textContent = ""; el.className = "muted"; }, 2000); }
+    function showMsg(el, text, ok=true) { el.textContent = text; el.className = ok ? "success" : "ended"; setTimeout(()=>{ el.textContent = ""; el.className = "muted"; }, 1800); }
     function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c] || c)); }
 
+    /* auth */
     async function guard() {
       const sess = await supabase.auth.getSession();
       const session = sess?.data?.session;
@@ -142,6 +164,7 @@
       if (!currentUser) { location.href = "login.html"; return; }
     }
 
+    /* helpers */
     function formatCountdown(endIso) {
       const end = new Date(endIso).getTime();
       const diff = end - Date.now();
@@ -158,6 +181,7 @@
       return firstName || fallback;
     }
 
+    /* data */
     async function fetchAll() {
       const p = await supabase.from("polls").select("*").order("created_at", { ascending:false });
       if (p.error) throw p.error;
@@ -170,6 +194,7 @@
       votes = v.data || [];
     }
 
+    /* create */
     async function createPoll() {
       const title = document.getElementById("title").value.trim();
       const duration = Math.min(72, Math.max(1, Number(document.getElementById("duration").value || 72)));
@@ -200,6 +225,7 @@
       });
     }
 
+    /* vote */
     async function vote(pollId, optionId) {
       const displayName = myDisplayName();
       const up = await supabase.from("poll_votes").upsert(
@@ -209,6 +235,7 @@
       if (up.error) throw up.error;
     }
 
+    /* indexers */
     function buildIndex() {
       const optByPoll = new Map();
       for (const o of options) {
@@ -228,6 +255,7 @@
       return { optByPoll, votesByPoll, votesByOption };
     }
 
+    /* render */
     function renderLists() {
       const q = (document.getElementById("search").value || "").trim().toLowerCase();
       const aq = (document.getElementById("archSearch").value || "").trim().toLowerCase();
@@ -244,7 +272,6 @@
         const pVotes = votesByPoll.get(p.id) || [];
         const myVote = pVotes.find(v => v.user_id === currentUser.id);
         const endedState = isEnded(p);
-        opts.sort((a,b) => a.label.localeCompare(b.label));
         const box = document.createElement("div");
         box.className = "poll";
         const cd = endedState ? "Ended" : formatCountdown(p.end_at);
@@ -258,6 +285,7 @@
           </div>
           <div class="sep"></div>
         `;
+        opts.sort((a,b) => a.label.localeCompare(b.label));
         opts.forEach(o => {
           const arr = votesByOption.get(o.id) || [];
           const count = arr.length;
@@ -298,6 +326,7 @@
       });
     }
 
+    /* realtime */
     function setupRealtime() {
       const channel = supabase.channel('polls_rt');
       channel.on('postgres_changes', { event:'*', schema:'public', table:'polls' }, async () => { await fetchAll(); renderLists(); });
@@ -306,7 +335,7 @@
       channel.subscribe();
     }
 
-    // option inputs ui
+    /* option inputs */
     function addOptionInput(value) {
       const safeValue = typeof value === 'string' ? value : '';
       const wrap = document.getElementById('optionsWrap');
@@ -326,21 +355,19 @@
       addOptionInput('');
     }
 
-    // wire up
+    /* wire up */
     document.getElementById('btnCreate').addEventListener('click', createPoll);
     document.getElementById('btnAddOpt').addEventListener('click', () => addOptionInput(''));
     document.getElementById('search').addEventListener('input', ()=> renderLists());
     document.getElementById('archSearch').addEventListener('input', ()=> renderLists());
     document.getElementById('btnSignOut').addEventListener('click', async () => { await supabase.auth.signOut(); location.href = 'login.html'; });
 
-    // start
+    /* start */
     async function init() {
       try {
         await withLoading('Loading polls', async () => { await guard(); resetOptionInputs(); await fetchAll(); renderLists(); setupRealtime(); });
         setInterval(()=> renderLists(), 1000);
-      } catch (e) {
-        showTopError(e.message || e);
-      }
+      } catch (e) { showTopError(e.message || e); }
     }
     init();
   </script>
